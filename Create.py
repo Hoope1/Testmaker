@@ -836,6 +836,7 @@ class AufgabenGenerator:
             self._template_gehalt,
             self._template_material,
             self._template_produktion,
+            self._template_energie,
         ]
         return random.choice(templates)()
 
@@ -862,7 +863,9 @@ class AufgabenGenerator:
 
         loesung = f"a) {fmt(neues_gehalt)}€, b) -{fmt(prozent, 1)}%"
         erklaerung = (
-            f"Stundenlohn: {fmt(stundenlohn)}€/h, Neues Gehalt: {fmt(neues_gehalt)}€"
+            f"Stundenlohn = {gehalt}/{stunden_alt} = {fmt(stundenlohn)}€/h. "
+            f"Neues Gehalt = {fmt(stundenlohn)}×{stunden_neu} = {fmt(neues_gehalt)}€. "
+            f"Prozentuale Änderung = ({gehalt} - {fmt(neues_gehalt)})/{gehalt}×100 = {fmt(prozent, 1)}%."
         )
 
         return aufgabe, loesung, erklaerung
@@ -914,7 +917,11 @@ class AufgabenGenerator:
             kosten = volumen_m3 * preis_wert
 
         loesung = f"a) {fmt(gewicht)}kg, b) {fmt(kosten)}€"
-        erklaerung = f"Volumen: {fmt(volumen_dm3)}dm³, Gewicht: {fmt(gewicht)}kg"
+        erklaerung = (
+            f"Volumen = {laenge}×{breite}×{hoehe} = {volumen_cm3}cm³ = {fmt(volumen_dm3)}dm³. "
+            f"Gewicht = {fmt(volumen_dm3)}×{material_data['dichte']} = {fmt(gewicht)}kg. "
+            f"Kosten = {fmt(gewicht)}×{preis_wert} = {fmt(kosten)}€"
+        )
 
         return aufgabe, loesung, erklaerung
 
@@ -940,7 +947,35 @@ class AufgabenGenerator:
         minuten = int((neue_zeit - stunden) * 60)
 
         loesung = f"{stunden}h {minuten}min"
-        erklaerung = f"Indirekt proportional: {maschinen}·{zeit}/{neue_maschinen} = {fmt(neue_zeit)}h"
+        erklaerung = (
+            f"Auftragsmenge bleibt gleich: {maschinen}×{zeit} = {maschinen * zeit} Maschinenstunden. "
+            f"Neue Zeit = {maschinen * zeit}/{neue_maschinen} = {fmt(neue_zeit)}h"
+        )
+
+        return aufgabe, loesung, erklaerung
+
+    def _template_energie(self) -> tuple[str, str, str]:
+        """Energieverbrauch einer Maschine."""
+        while True:
+            leistung = round(random.uniform(1.5, 5.0), 1)
+            stunden = random.randint(4, 8)
+            if self._register_task("text/energie", [int(leistung * 10), stunden]):
+                break
+
+        preis = self.austrian_data.preise["strom_kwh"]
+        aufgabe = (
+            f"Eine Maschine mit {leistung}kW läuft {stunden} Stunden. "
+            f"Strompreis: {preis}€/kWh. a) Energieverbrauch? b) Kosten?"
+        )
+
+        verbrauch = leistung * stunden
+        kosten = verbrauch * preis
+
+        loesung = f"a) {fmt(verbrauch)}kWh, b) {fmt(kosten)}€"
+        erklaerung = (
+            f"Verbrauch = {leistung}×{stunden} = {fmt(verbrauch)}kWh. "
+            f"Kosten = {fmt(verbrauch)}×{preis} = {fmt(kosten)}€"
+        )
 
         return aufgabe, loesung, erklaerung
 
@@ -950,6 +985,7 @@ class AufgabenGenerator:
             self._template_pumpsystem,
             self._template_mischung,
             self._template_logistik,
+            self._template_personalplanung,
         ]
         return random.choice(templates)()
 
@@ -985,7 +1021,12 @@ class AufgabenGenerator:
         reicht = "Ja" if tank >= verbrauch else "Nein"
 
         loesung = f"a) {fmt(zeit_gesamt, 1)}min, b) {fmt(restzeit, 1)}min, c) {reicht} ({verbrauch}L Bedarf)"
-        erklaerung = f"Füllraten: A={fmt(rate_a, 1)}L/min, B={fmt(rate_b, 1)}L/min, Gesamt={fmt(rate_gesamt, 1)}L/min"
+        erklaerung = (
+            f"Rate A = {tank}/{pumpe_a_zeit} = {fmt(rate_a, 1)}L/min, "
+            f"Rate B = {tank}/{pumpe_b_zeit} = {fmt(rate_b, 1)}L/min, "
+            f"gemeinsam {fmt(rate_gesamt, 1)}L/min. "
+            f"Restmenge = {tank}×(1-{fuellstand}/100) = {fmt(restmenge, 1)}L"
+        )
 
         return aufgabe, loesung, erklaerung
 
@@ -1020,7 +1061,10 @@ class AufgabenGenerator:
         loesung = (
             f"a) {fmt(gesamtkosten)}€, b) {fmt(durchschnitt)}€/kg, c) {fmt(x, 1)}kg"
         )
-        erklaerung = f"Kosten A: {fmt(kosten_a)}€, Kosten B: {fmt(kosten_b)}€"
+        erklaerung = (
+            f"Gesamtkosten = {fmt(kosten_a)} + {fmt(kosten_b)} = {fmt(gesamtkosten)}€. "
+            f"Durchschnitt = {fmt(gesamtkosten)}/{gesamtmenge} = {fmt(durchschnitt)}€/kg"
+        )
 
         return aufgabe, loesung, erklaerung
 
@@ -1053,7 +1097,45 @@ class AufgabenGenerator:
         kosten_pro_palette = diesel_kosten / paletten
 
         loesung = f"a) {fahrten} Fahrten, b) {fmt(diesel_kosten)}€, c) {fmt(kosten_pro_palette)}€/Palette"
-        erklaerung = f"Gesamtgewicht: {fmt(gesamtgewicht, 0, True)}kg, Diesel: {fmt(diesel_gesamt, 1)}L"
+        erklaerung = (
+            f"Gesamtgewicht = {paletten}×{gewicht_palette} = {fmt(gesamtgewicht, 0, True)}kg. "
+            f"Diesel = {fahrten}×{strecke}×{verbrauch}/100 = {fmt(diesel_gesamt, 1)}L"
+        )
+
+        return aufgabe, loesung, erklaerung
+
+    def _template_personalplanung(self) -> tuple[str, str, str]:
+        """Personalplanung für ein Projekt."""
+        while True:
+            arbeitsstunden = random.randint(400, 800)
+            ziel_tage = random.randint(10, 20)
+            stunden_tag = random.randint(6, 8)
+            arbeiter_vorhanden = random.randint(5, 10)
+            ausfall = random.randint(1, 3)
+            if self._register_task(
+                "text/personal",
+                [arbeitsstunden, ziel_tage, stunden_tag, arbeiter_vorhanden, ausfall],
+            ):
+                break
+
+        aufgabe = (
+            f"Ein Projekt umfasst {arbeitsstunden} Arbeitsstunden und soll in {ziel_tage} Tagen "
+            f"mit Arbeitstagen zu {stunden_tag} Stunden fertig sein. "
+            f"a) Wie viele Arbeiter sind nötig? b) Stehen nur {arbeiter_vorhanden} Arbeiter zur Verfügung, "
+            f"wie viele Tage dauert es? c) Fallen {ausfall} Arbeiter aus, wie lange dauert es dann?"
+        )
+
+        arbeiter_noetig = math.ceil(arbeitsstunden / (ziel_tage * stunden_tag))
+        dauer_b = arbeitsstunden / (arbeiter_vorhanden * stunden_tag)
+        dauer_c = arbeitsstunden / ((arbeiter_vorhanden - ausfall) * stunden_tag)
+
+        loesung = f"a) {arbeiter_noetig} Arbeiter, b) {fmt(dauer_b, 1)} Tage, c) {fmt(dauer_c, 1)} Tage"
+        erklaerung = (
+            f"Tagesleistung pro Arbeiter = {stunden_tag}h. "
+            f"Benötigte Arbeiter = {arbeitsstunden}/({ziel_tage}×{stunden_tag}) = {arbeiter_noetig}. "
+            f"Mit {arbeiter_vorhanden} Arbeitern: {arbeitsstunden}/({arbeiter_vorhanden}×{stunden_tag}) = {fmt(dauer_b, 1)} Tage. "
+            f"Nach Ausfall: {arbeitsstunden}/(({arbeiter_vorhanden - ausfall})×{stunden_tag}) = {fmt(dauer_c, 1)} Tage"
+        )
 
         return aufgabe, loesung, erklaerung
 
@@ -1190,34 +1272,62 @@ class AufgabenGenerator:
 
     def generate_drei_ansichten(self) -> tuple[str, str, str]:
         """Generiert Drei-Ansichten-Aufgabe."""
-        koerper_typen = [
-            "Quader mit Aussparung",
-            "L-förmiger Körper",
-            "T-förmiger Körper",
-            "Treppenförmiger Körper",
-            "Würfel mit quadratischer Bohrung",
-        ]
+        koerper_ascii = {
+            "Quader mit Aussparung": (
+                "```\n" "┌───────┐\n" "│ ┌───┐ │\n" "│ └───┘ │\n" "└───────┘\n" "```"
+            ),
+            "L-förmiger Körper": (
+                "```\n"
+                "    ┌───┐\n"
+                "    │   │\n"
+                "┌───┼───┘\n"
+                "│   │\n"
+                "└───┘\n"
+                "```"
+            ),
+            "T-förmiger Körper": (
+                "```\n"
+                "┌───┬───┬───┐\n"
+                "│   │   │   │\n"
+                "└───┼───┼───┘\n"
+                "    │   │\n"
+                "    └───┘\n"
+                "```"
+            ),
+            "Treppenförmiger Körper": (
+                "```\n" "┌───┐\n" "│   └───┐\n" "│       │\n" "└───────┘\n" "```"
+            ),
+            "Würfel mit quadratischer Bohrung": (
+                "```\n" "┌───┐\n" "│┌─┐│\n" "│└─┘│\n" "└───┘\n" "```"
+            ),
+            "U-förmiger Körper": (
+                "```\n"
+                "┌───┐ ┌───┐\n"
+                "│   │ │   │\n"
+                "└───┼─┼───┘\n"
+                "    │ │\n"
+                "    └─┘\n"
+                "```"
+            ),
+            "Z-förmiger Körper": (
+                "```\n" "┌───┐\n" "└─┐ │\n" "  │ └─┐\n" "  └───┘\n" "```"
+            ),
+        }
 
-        koerper = random.choice(koerper_typen)
+        koerper = random.choice(list(koerper_ascii.keys()))
 
-        aufgabe = f"Skizzieren Sie den {koerper} in Vorderansicht, Seitenansicht (von links) und Draufsicht.\n"
-        aufgabe += "Ordnen Sie die Ansichten nach technischer Norm an.\n"
-        aufgabe += "(Verwenden Sie einen weichen Bleistift, Lineal ist nicht notwendig)"
+        aufgabe = (
+            f"Skizzieren Sie den {koerper} in Vorderansicht, Seitenansicht (von links) und Draufsicht.\n"
+            "Ordnen Sie die Ansichten nach technischer Norm an.\n"
+            "(Verwenden Sie einen weichen Bleistift, Lineal ist nicht notwendig)"
+        )
 
-        # ASCII-Art für einfache Darstellung
-        if koerper == "L-förmiger Körper":
-            aufgabe += "\n```\n"
-            aufgabe += "    ┌───┐\n"
-            aufgabe += "    │   │\n"
-            aufgabe += "┌───┼───┘\n"
-            aufgabe += "│   │\n"
-            aufgabe += "└───┘\n"
-            aufgabe += "```"
+        aufgabe += "\n" + koerper_ascii.get(koerper, "")
 
         loesung = f"Drei Ansichten des {koerper} nach DIN/ISO"
         erklaerung = (
-            "Anordnung nach 1. Winkelprojektion (DIN/ISO): Draufsicht über der "
-            "Vorderansicht, Seitenansicht (linke Ansicht) links von der Vorderansicht."
+            "Anordnung nach 1. Winkelprojektion (DIN/ISO): Draufsicht über der Vorderansicht, "
+            "Seitenansicht (linke Ansicht) links der Vorderansicht; gleiche Maßstäbe beachten."
         )
 
         return aufgabe, loesung, erklaerung
@@ -1232,11 +1342,36 @@ class AufgabenGenerator:
             "Tetraeder": 4,
         }
 
+        netz_ascii = {
+            "Würfel": (
+                "```\n"
+                "    ┌───┐\n"
+                "┌───┼───┼───┐\n"
+                "└───┼───┼───┘\n"
+                "    └───┘\n"
+                "```"
+            ),
+            "Quader": (
+                "```\n"
+                "    ┌─────┐\n"
+                "┌─────┼─────┼─────┐\n"
+                "└─────┼─────┼─────┘\n"
+                "    └─────┘\n"
+                "```"
+            ),
+            "Pyramide (quadratische Grundfläche)": (
+                "```\n" "  ▲\n" " ▲▲▲\n" "▲▲▲▲▲\n" "  ◼\n" "```"
+            ),
+        }
+
         koerper = random.choice(list(koerper_typen.keys()))
         flaechen = koerper_typen[koerper]
 
         aufgabe = f"Skizzieren Sie das Körpernetz eines {koerper}.\n"
         aufgabe += f"Beachten Sie: Der Körper hat {flaechen} Flächen."
+
+        if koerper in netz_ascii:
+            aufgabe += "\n" + netz_ascii[koerper]
 
         loesung = f"Körpernetz des {koerper} mit {flaechen} Flächen"
         erklaerung = "Alle Flächen müssen zusammenhängend und ausklappbar sein"
