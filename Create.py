@@ -542,16 +542,16 @@ class AufgabenGenerator:
         mult = b * c
         first_bracket = a - mult
         second_bracket = d + e
-        div = second_bracket // f
-        result = first_bracket + div
+        div = second_bracket / f
+        result = round(first_bracket + div, 2)
 
-        loesung = str(result)
+        loesung = f"{result:.2f}"
         erklaerung = (
             f"Schritt 1: {b} · {c} = {mult}\n"
             f"Schritt 2: {a} - {mult} = {first_bracket}\n"
             f"Schritt 3: {d} + {e} = {second_bracket}\n"
-            f"Schritt 4: {second_bracket} : {f} = {div}\n"
-            f"Schritt 5: {first_bracket} + {div} = {result}"
+            f"Schritt 4: {second_bracket} : {f} = {div:.2f}\n"
+            f"Schritt 5: {first_bracket} + {div:.2f} = {result:.2f}"
         )
 
         return aufgabe, loesung, erklaerung
@@ -568,16 +568,16 @@ class AufgabenGenerator:
         aufgabe = f"-{a} + (-{b}) · {c} - ({d} + {e}) : {f}"
         neg_mult = -b * c
         sum_de = d + e
-        div = sum_de // f
-        result = -a + neg_mult - div
+        div = sum_de / f
+        result = round(-a + neg_mult - div, 2)
 
-        loesung = str(result)
+        loesung = f"{result:.2f}"
         erklaerung = (
             f"Schritt 1: (-{b}) · {c} = {neg_mult}\n"
             f"Schritt 2: {d} + {e} = {sum_de}\n"
-            f"Schritt 3: {sum_de} : {f} = {div}\n"
+            f"Schritt 3: {sum_de} : {f} = {div:.2f}\n"
             f"Schritt 4: -{a} + {neg_mult} = {-a + neg_mult}\n"
-            f"Schritt 5: {-a + neg_mult} - {div} = {result}"
+            f"Schritt 5: {-a + neg_mult} - {div:.2f} = {result:.2f}"
         )
 
         return aufgabe, loesung, erklaerung
@@ -595,7 +595,7 @@ class AufgabenGenerator:
         # Stelle sicher, dass Nenner unterschiedlich sind (kein gemeinsamer Nenner von Anfang an)
         d1 = random.randint(2, max_denominator)
         d2 = random.randint(2, max_denominator)
-        while d2 == d1 or math.gcd(d1, d2) == max(d1, d2):
+        while d2 == d1 or (d1 % d2 == 0) or (d2 % d1 == 0):
             d2 = random.randint(2, max_denominator)
 
         # Prüfe ob gemeinsamer Nenner < 100
@@ -806,19 +806,37 @@ class AufgabenGenerator:
         breite = random.randint(10, 30)  # cm
         hoehe = random.randint(5, 20)  # cm
 
-        preis_kg = self.austrian_data.preise.get(f"{material.split('_')[0]}_kg", 1.0)
+        preis_map = {
+            "stahl": "stahl_kg",
+            "aluminium": "aluminium_kg",
+            "kupfer": "kupfer_kg",
+            "beton": "beton_m3",
+            "holz_fichte": None,
+        }
+        mat_key = material.split("_")[0]
+        preis_key = preis_map.get(mat_key)
+        if preis_key is None:
+            material = "stahl"
+            material_data = self.austrian_data.materialien[material]
+            preis_key = "stahl_kg"
+        preis_wert = self.austrian_data.preise[preis_key]
+        einheit = "€/kg" if preis_key.endswith("_kg") else "€/m³"
 
         aufgabe = (
             f"Ein Werkstück aus {material.replace('_', ' ').title()} hat die Maße "
             f"{laenge}cm × {breite}cm × {hoehe}cm. "
             f"Dichte: {material_data['dichte']} {material_data['einheit']}. "
-            f"Preis: {preis_kg}€/kg. Berechnen Sie: a) Gewicht b) Materialkosten"
+            f"Preis: {preis_wert}{einheit}. Berechnen Sie: a) Gewicht b) Materialkosten"
         )
 
         volumen_cm3 = laenge * breite * hoehe
         volumen_dm3 = volumen_cm3 / 1000
+        volumen_m3 = volumen_cm3 / 1_000_000
         gewicht = volumen_dm3 * material_data["dichte"]
-        kosten = gewicht * preis_kg
+        if preis_key.endswith("_kg"):
+            kosten = gewicht * preis_wert
+        else:
+            kosten = volumen_m3 * preis_wert
 
         loesung = f"a) {gewicht:.2f}kg, b) {kosten:.2f}€"
         erklaerung = f"Volumen: {volumen_dm3:.2f}dm³, Gewicht: {gewicht:.2f}kg"
@@ -1572,7 +1590,9 @@ class OutputManager:
         sol_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
         sol_doc.add_paragraph()
-        sol_doc.add_paragraph("Lösungsschlüssel für Lehrkraft").bold = True
+        p = sol_doc.add_paragraph()
+        r = p.add_run("Lösungsschlüssel für Lehrkraft")
+        r.bold = True
         sol_doc.add_paragraph()
 
         OutputManager._parse_markdown_to_word(sol_doc, solutions)
@@ -1587,7 +1607,7 @@ class OutputManager:
             return
 
         lines = markdown_text.split("\n")
-        current_list = None
+        current_table = None
 
         for line in lines:
             if line.startswith("## "):
@@ -1615,16 +1635,25 @@ class OutputManager:
                 # Code-Block (ignorieren)
                 continue
             elif line.startswith("|"):
-                # Tabelle (vereinfacht)
-                if current_list is None:
-                    current_list = []
-                current_list.append(line)
+                cols = [c.strip() for c in line.strip("|").split("|")]
+                if current_table is None:
+                    current_table = doc.add_table(rows=1, cols=len(cols))
+                    hdr = current_table.rows[0].cells
+                    for j, txt in enumerate(cols):
+                        hdr[j].text = txt
+                else:
+                    row = current_table.add_row().cells
+                    for j, txt in enumerate(cols):
+                        row[j].text = txt
             elif line.strip() == "---":
                 # Horizontale Linie
                 doc.add_paragraph("_" * 50)
             elif line.strip():
+                current_table = None
                 # Normaler Text
                 doc.add_paragraph(line)
+            else:
+                current_table = None
 
     @staticmethod
     def save_latex(
@@ -1711,25 +1740,38 @@ Bestehensgrenze: 60 Punkte
         lines = markdown_text.split("\n")
         in_math = False
 
+        def _tex_escape(s: str) -> str:
+            return (
+                s.replace("\\", "\\textbackslash{}")
+                .replace("&", "\\&")
+                .replace("%", "\\%")
+                .replace("$", "\\$")
+                .replace("#", "\\#")
+                .replace("_", "\\_")
+                .replace("{", "\\{")
+                .replace("}", "\\}")
+                .replace("~", "\\textasciitilde{}")
+                .replace("^", "\\textasciicircum{}")
+            )
+
         for line in lines:
             if line.startswith("## "):
-                latex += f"\\section{{{line[3:]}}}\n"
+                latex += f"\\section{{{_tex_escape(line[3:])}}}\n"
             elif line.startswith("### "):
-                latex += f"\\subsection{{{line[4:]}}}\n"
+                latex += f"\\subsection{{{_tex_escape(line[4:])}}}\n"
             elif line.startswith("**") and line.endswith("**"):
-                latex += f"\\textbf{{{line[2:-2]}}}\n\n"
+                latex += f"\\textbf{{{_tex_escape(line[2:-2])}}}\n\n"
             elif line.startswith("*") and line.endswith("*"):
-                latex += f"\\textit{{{line[1:-1]}}}\n\n"
+                latex += f"\\textit{{{_tex_escape(line[1:-1])}}}\n\n"
             elif line.startswith("- "):
-                latex += f"\\item {line[2:]}\n"
+                latex += f"\\item {_tex_escape(line[2:])}\n"
             elif "=" in line and any(
                 op in line for op in ["+", "-", "·", ":", "(", ")"]
             ):
-                # Mathematische Gleichung
                 equation = line.replace("·", r"\cdot").replace(":", r"\div")
                 latex += f"$${equation}$$\n"
             elif line.strip():
-                latex += f"{line}\n\n"
+                latex += _tex_escape(line) + "\n\n"
 
         latex += r"\end{document}"
 
