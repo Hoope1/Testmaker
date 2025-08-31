@@ -111,6 +111,13 @@ pyproject-fmt & toml-sort für TOML.
 - Deterministische Reihenfolge der Tools.
 - Trailing Commas optional.
 
+## Prüfleitfaden
+
+1. `pip install -r requirements.txt`
+1. Tool-Chain in der angegebenen Reihenfolge ausführen.
+1. `pre-commit run --all-files`
+1. `pytest` (falls Tests vorhanden)
+
 ## Änderungsprotokoll
 
 - v1.0 (31-Aug-2025): Erstausgabe, reine API-Variante ohne Shell/CLI.
