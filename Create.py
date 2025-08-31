@@ -383,6 +383,40 @@ class AufgabenGenerator:
         self.quality_control.register_numbers(numbers)
         return True
 
+    @staticmethod
+    def _choose_scale(l1: float, w1: float, l2: float, w2: float) -> tuple[int, int]:
+        """Wählt einen technischen Maßstab aus.
+
+        Der Maßstab stellt sicher, dass die kürzeste Seite mindestens
+        20 mm groß ist und die Zeichnung auf ein A4-Blatt abzüglich
+        10% (189 mm × 267 mm) passt.
+        """
+        scales: list[tuple[int, int]] = [
+            (10, 1),
+            (5, 1),
+            (2, 1),
+            (1, 1),
+            (1, 2),
+            (1, 5),
+            (1, 10),
+            (1, 20),
+            (1, 50),
+            (1, 100),
+            (1, 200),
+            (1, 500),
+            (1, 1000),
+        ]
+        min_dim = min(l1, w1, l2, w2)
+        for num, den in scales:
+            factor = num / den
+            width = l1 * factor
+            height = w1 * factor
+            if min_dim * factor >= 20 and (
+                (width <= 267 and height <= 189) or (width <= 189 and height <= 267)
+            ):
+                return num, den
+        return scales[-1]
+
     def generate_grundrechnung(self, punkte: int) -> tuple[str, str, str]:
         """Generiert Grundrechenaufgabe."""
         if punkte <= 2:  # Leicht
@@ -1480,14 +1514,15 @@ class AufgabenGenerator:
             w1 = random.randint(30, 60)
             l2 = random.randint(20, 40)
             w2 = random.randint(15, 35)
-            massstab = random.choice([10, 20, 50])
+            mass_num, mass_den = self._choose_scale(l1, w1, l2, w2)
+            massstab = f"{mass_num}:{mass_den}"
 
             aufgabe = (
                 f"Ein L-förmiges Werkstück besteht aus zwei Rechtecken:\n"
                 f"Hauptteil: {l1}mm × {w1}mm\n"
                 f"Ansatz: {l2}mm × {w2}mm (an der Ecke)\n"
                 f"a) Berechnen Sie Umfang und Fläche\n"
-                f"b) Zeichnen Sie es im Maßstab 1:{massstab}"
+                f"b) Zeichnen Sie es im Maßstab {massstab}"
             )
 
             flaeche = self.geometry.l_shape_area(l1, w1, l2, w2)
