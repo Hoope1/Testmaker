@@ -9,6 +9,9 @@ import random
 import math
 import json
 import re
+import ast
+import operator
+import argparse
 from fractions import Fraction
 from typing import Tuple, List, Dict, Any, Optional
 from dataclasses import dataclass
@@ -19,11 +22,9 @@ import os
 # Für Word-Export
 try:
     from docx import Document
-    from docx.shared import Pt, Inches, Cm
+    from docx.shared import Pt
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.enum.table import WD_TABLE_ALIGNMENT
-    from docx.oxml import OxmlElement
-    from docx.oxml.ns import qn
 
     HAS_DOCX = True
 except ImportError:
@@ -31,7 +32,6 @@ except ImportError:
     # Dummy-Klassen für den Fall, dass python-docx nicht installiert ist
     Document = None
     Pt = None
-    Inches = None
 
 # Für LaTeX-Export
 try:
@@ -42,6 +42,15 @@ try:
     )
 except:
     HAS_LATEX = False
+
+
+def fmt(x: float, nd: int = 2, thousand: bool = False) -> str:
+    s = f"{x:,.{nd}f}" if thousand else f"{x:.{nd}f}"
+    return s.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def fmt_int_or_dec(x: float, nd_if_dec: int = 2) -> str:
+    return f"{int(x)}" if float(x).is_integer() else fmt(x, nd_if_dec)
 
 
 class Schwierigkeit(Enum):
@@ -103,29 +112,39 @@ class AustrianData:
 class MathSolver:
     """Robuster mathematischer Solver mit Bruchrechnung"""
 
+    _ops = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+    }
+
     @staticmethod
-    def evaluate_expression(expr: str) -> float:
+    def evaluate_expression(expr: str) -> Optional[float]:
         """Sichere Auswertung mathematischer Ausdrücke"""
+
+        def _eval(node):
+            if isinstance(node, ast.Num):
+                return node.n
+            if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+                return -_eval(node.operand)
+            if isinstance(node, ast.BinOp) and type(node.op) in MathSolver._ops:
+                return MathSolver._ops[type(node.op)](
+                    _eval(node.left), _eval(node.right)
+                )
+            raise ValueError("Ungültiger Ausdruck")
+
         try:
-            # Ersetze mathematische Symbole
             expr = (
                 expr.replace("·", "*")
                 .replace("×", "*")
                 .replace(":", "/")
                 .replace("÷", "/")
+                .replace(",", ".")
             )
-            expr = expr.replace(" ", "").replace("[", "(").replace("]", ")")
-            expr = expr.replace("−", "-")  # Unicode minus
-
-            # Sicherheitsprüfung
-            allowed = set("0123456789+-*/().")
-            if not all(c in allowed or c == "," for c in expr):
-                return None
-
-            expr = expr.replace(",", ".")
-            result = eval(expr)
-            return round(result, 4)
-        except:
+            tree = ast.parse(expr, mode="eval")
+            return round(float(_eval(tree.body)), 4)
+        except Exception:
             return None
 
     @staticmethod
@@ -272,9 +291,19 @@ class GeometryCalculator:
 
     @staticmethod
     def l_shape_perimeter(l1: float, w1: float, l2: float, w2: float) -> float:
-        """Umfang einer L-Form (vereinfacht)"""
-        # Annahme: L2 ist kleiner und an der Ecke
-        return 2 * (l1 + w1) + 2 * (l2 + w2) - 2 * min(l2, w2)
+        """Umfang einer L-Form"""
+        pts = [
+            (0, 0),
+            (l1, 0),
+            (l1, w1),
+            (l1 - l2, w1),
+            (l1 - l2, w1 - w2),
+            (0, w1 - w2),
+        ]
+        return sum(
+            math.hypot(pts[(i + 1) % 6][0] - pts[i][0], pts[(i + 1) % 6][1] - pts[i][1])
+            for i in range(6)
+        )
 
     @staticmethod
     def cuboid_volume(length: float, width: float, height: float) -> float:
@@ -339,20 +368,6 @@ class UnitConverter:
         result = base_value / cls.conversions[to_unit]
         return result
 
-    @staticmethod
-    def format_time(minutes: float) -> str:
-        """Formatiert Minuten als h:min:s"""
-        hours = int(minutes // 60)
-        mins = int(minutes % 60)
-        secs = int((minutes % 1) * 60)
-
-        if secs > 0:
-            return f"{hours}h {mins}min {secs}s"
-        elif hours > 0:
-            return f"{hours}h {mins}min"
-        else:
-            return f"{mins}min"
-
 
 class AufgabenGenerator:
     """Generiert verschiedene Aufgabentypen"""
@@ -364,6 +379,15 @@ class AufgabenGenerator:
         self.math_solver = MathSolver()
         self.geometry = GeometryCalculator()
         self.converter = UnitConverter()
+
+    def _register_task(self, template_id: str, numbers: List[int]) -> bool:
+        if not self.quality_control.check_template(template_id):
+            return False
+        if not self.quality_control.check_similarity(numbers):
+            return False
+        self.quality_control.register_template(template_id)
+        self.quality_control.register_numbers(numbers)
+        return True
 
     def generate_grundrechnung(self, punkte: int) -> Tuple[str, str, str]:
         """Generiert Grundrechenaufgabe"""
@@ -386,60 +410,80 @@ class AufgabenGenerator:
 
     def _template_addition(self) -> Tuple[str, str, str]:
         """Addition Template"""
-        a = (
-            random.randint(50, 500)
-            if self.schwierigkeit == Schwierigkeit.EINFACH
-            else random.randint(100, 999)
-        )
-        b = (
-            random.randint(20, 200)
-            if self.schwierigkeit == Schwierigkeit.EINFACH
-            else random.randint(50, 500)
-        )
-        c = (
-            random.randint(10, 100)
-            if self.schwierigkeit == Schwierigkeit.EINFACH
-            else random.randint(20, 300)
-        )
+        while True:
+            a = (
+                random.randint(50, 500)
+                if self.schwierigkeit == Schwierigkeit.EINFACH
+                else random.randint(100, 999)
+            )
+            b = (
+                random.randint(20, 200)
+                if self.schwierigkeit == Schwierigkeit.EINFACH
+                else random.randint(50, 500)
+            )
+            c = (
+                random.randint(10, 100)
+                if self.schwierigkeit == Schwierigkeit.EINFACH
+                else random.randint(20, 300)
+            )
+            if self._register_task("grundrechnung/addition", [a, b, c]):
+                break
 
         aufgabe = f"{a} + {b} - {c}"
-        loesung = str(a + b - c)
-        erklaerung = f"Schritt 1: {a} + {b} = {a+b}\nSchritt 2: {a+b} - {c} = {loesung}"
+        result = a + b - c
+        loesung = fmt(result)
+        erklaerung = (
+            f"Schritt 1: {fmt(a + b)}\nSchritt 2: {fmt(a + b)} - {fmt(c)} = {loesung}"
+        )
 
         return aufgabe, loesung, erklaerung
 
     def _template_subtraktion(self) -> Tuple[str, str, str]:
         """Subtraktion Template"""
-        a = random.randint(500, 1000)
-        b = random.randint(100, 400)
-        c = random.randint(50, 200)
+        while True:
+            a = random.randint(500, 1000)
+            b = random.randint(100, 400)
+            c = random.randint(50, 200)
+            if self._register_task("grundrechnung/subtraktion", [a, b, c]):
+                break
 
         aufgabe = f"{a} - {b} - {c}"
-        loesung = str(a - b - c)
-        erklaerung = f"Schritt 1: {a} - {b} = {a-b}\nSchritt 2: {a-b} - {c} = {loesung}"
+        result = a - b - c
+        loesung = fmt(result)
+        erklaerung = (
+            f"Schritt 1: {fmt(a)} - {fmt(b)} = {fmt(a - b)}\n"
+            f"Schritt 2: {fmt(a - b)} - {fmt(c)} = {loesung}"
+        )
 
         return aufgabe, loesung, erklaerung
 
     def _template_multiplikation(self) -> Tuple[str, str, str]:
         """Multiplikation Template"""
-        a = random.randint(12, 25)
-        b = random.randint(3, 12)
+        while True:
+            a = random.randint(12, 25)
+            b = random.randint(3, 12)
+            if self._register_task("grundrechnung/multiplikation", [a, b]):
+                break
 
         aufgabe = f"{a} · {b}"
-        loesung = str(a * b)
-        erklaerung = f"{a} · {b} = {loesung}"
+        result = a * b
+        loesung = fmt(result)
+        erklaerung = f"{fmt(a)} · {fmt(b)} = {loesung}"
 
         return aufgabe, loesung, erklaerung
 
     def _template_division(self) -> Tuple[str, str, str]:
         """Division Template"""
-        b = random.randint(5, 15)
-        result = random.randint(10, 50)
-        a = b * result
+        while True:
+            b = random.randint(5, 15)
+            result = random.randint(10, 50)
+            a = b * result
+            if self._register_task("grundrechnung/division", [a, b]):
+                break
 
         aufgabe = f"{a} : {b}"
-        loesung = str(result)
-        erklaerung = f"{a} : {b} = {loesung}"
+        loesung = fmt(result)
+        erklaerung = f"{fmt(a)} : {fmt(b)} = {loesung}"
 
         return aufgabe, loesung, erklaerung
 
@@ -454,43 +498,64 @@ class AufgabenGenerator:
 
     def _template_klammer_plus(self) -> Tuple[str, str, str]:
         """Klammer mit Addition"""
-        a = random.randint(80, 150)
-        b = random.randint(10, 30)
-        c = random.randint(3, 8)
-        d = random.randint(5, 15)
+        while True:
+            a = random.randint(80, 150)
+            b = random.randint(10, 30)
+            c = random.randint(3, 8)
+            d = random.randint(5, 15)
+            if self._register_task("grundrechnung/klammer_plus", [a, b, c, d]):
+                break
 
         aufgabe = f"{a} - ({b} + {c} · {d})"
         result = a - (b + c * d)
-        loesung = str(result)
-        erklaerung = f"Schritt 1: {c} · {d} = {c*d}\nSchritt 2: {b} + {c*d} = {b + c*d}\nSchritt 3: {a} - {b + c*d} = {result}"
+        loesung = fmt(result)
+        erklaerung = (
+            f"Schritt 1: {fmt(c)} · {fmt(d)} = {fmt(c * d)}\n"
+            f"Schritt 2: {fmt(b)} + {fmt(c * d)} = {fmt(b + c * d)}\n"
+            f"Schritt 3: {fmt(a)} - {fmt(b + c * d)} = {loesung}"
+        )
 
         return aufgabe, loesung, erklaerung
 
     def _template_klammer_minus(self) -> Tuple[str, str, str]:
         """Klammer mit Subtraktion"""
-        a = random.randint(20, 40)
-        b = random.randint(10, 25)
-        c = random.randint(2, 6)
-        d = random.randint(10, 30)
+        while True:
+            a = random.randint(20, 40)
+            b = random.randint(10, 25)
+            c = random.randint(2, 6)
+            d = random.randint(10, 30)
+            if self._register_task("grundrechnung/klammer_minus", [a, b, c, d]):
+                break
 
         aufgabe = f"({a} + {b}) · {c} - {d}"
         result = (a + b) * c - d
-        loesung = str(result)
-        erklaerung = f"Schritt 1: {a} + {b} = {a+b}\nSchritt 2: {a+b} · {c} = {(a+b)*c}\nSchritt 3: {(a+b)*c} - {d} = {result}"
+        loesung = fmt(result)
+        erklaerung = (
+            f"Schritt 1: {fmt(a)} + {fmt(b)} = {fmt(a + b)}\n"
+            f"Schritt 2: {fmt(a + b)} · {fmt(c)} = {fmt((a + b) * c)}\n"
+            f"Schritt 3: {fmt((a + b) * c)} - {fmt(d)} = {loesung}"
+        )
 
         return aufgabe, loesung, erklaerung
 
     def _template_klammer_mal(self) -> Tuple[str, str, str]:
         """Klammer mit Multiplikation"""
-        a = random.randint(100, 200)
-        b = random.randint(5, 15)
-        c = random.randint(3, 8)
-        d = random.randint(20, 50)
+        while True:
+            a = random.randint(100, 200)
+            b = random.randint(5, 15)
+            c = random.randint(3, 8)
+            d = random.randint(20, 50)
+            if self._register_task("grundrechnung/klammer_mal", [a, b, c, d]):
+                break
 
         aufgabe = f"{a} + {b} · ({c} + {d})"
         result = a + b * (c + d)
-        loesung = str(result)
-        erklaerung = f"Schritt 1: {c} + {d} = {c+d}\nSchritt 2: {b} · {c+d} = {b*(c+d)}\nSchritt 3: {a} + {b*(c+d)} = {result}"
+        loesung = fmt(result)
+        erklaerung = (
+            f"Schritt 1: {fmt(c)} + {fmt(d)} = {fmt(c + d)}\n"
+            f"Schritt 2: {fmt(b)} · {fmt(c + d)} = {fmt(b * (c + d))}\n"
+            f"Schritt 3: {fmt(a)} + {fmt(b * (c + d))} = {loesung}"
+        )
 
         return aufgabe, loesung, erklaerung
 
@@ -505,12 +570,15 @@ class AufgabenGenerator:
 
     def _template_verschachtelt1(self) -> Tuple[str, str, str]:
         """Verschachtelte Klammern Typ 1"""
-        a = random.randint(100, 200)
-        b = random.randint(8, 20)
-        c = random.randint(2, 6)
-        d = random.randint(10, 25)
-        e = random.randint(3, 8)
-        f = random.randint(10, 40)
+        while True:
+            a = random.randint(100, 200)
+            b = random.randint(8, 20)
+            c = random.randint(2, 6)
+            d = random.randint(10, 25)
+            e = random.randint(3, 8)
+            f = random.randint(10, 40)
+            if self._register_task("grundrechnung/verschachtelt1", [a, b, c, d, e, f]):
+                break
 
         aufgabe = f"{a} - [{b} + {c} · ({d} - {e})] + {f}"
         inner = d - e
@@ -518,66 +586,72 @@ class AufgabenGenerator:
         bracket = b + mult
         result = a - bracket + f
 
-        loesung = str(result)
+        loesung = fmt(result)
         erklaerung = (
-            f"Schritt 1: {d} - {e} = {inner}\n"
-            f"Schritt 2: {c} · {inner} = {mult}\n"
-            f"Schritt 3: {b} + {mult} = {bracket}\n"
-            f"Schritt 4: {a} - {bracket} = {a - bracket}\n"
-            f"Schritt 5: {a - bracket} + {f} = {result}"
+            f"Schritt 1: {fmt(d)} - {fmt(e)} = {fmt(inner)}\n"
+            f"Schritt 2: {fmt(c)} · {fmt(inner)} = {fmt(mult)}\n"
+            f"Schritt 3: {fmt(b)} + {fmt(mult)} = {fmt(bracket)}\n"
+            f"Schritt 4: {fmt(a)} - {fmt(bracket)} = {fmt(a - bracket)}\n"
+            f"Schritt 5: {fmt(a - bracket)} + {fmt(f)} = {loesung}"
         )
 
         return aufgabe, loesung, erklaerung
 
     def _template_verschachtelt2(self) -> Tuple[str, str, str]:
         """Verschachtelte Klammern Typ 2"""
-        a = random.randint(150, 250)
-        b = random.randint(20, 40)
-        c = random.randint(3, 7)
-        d = random.randint(5, 15)
-        e = random.randint(10, 30)
-        f = random.randint(2, 5)
+        while True:
+            a = random.randint(150, 250)
+            b = random.randint(20, 40)
+            c = random.randint(3, 7)
+            d = random.randint(5, 15)
+            e = random.randint(10, 30)
+            f = random.randint(2, 5)
+            if self._register_task("grundrechnung/verschachtelt2", [a, b, c, d, e, f]):
+                break
 
         aufgabe = f"[{a} - ({b} · {c})] + ({d} + {e}) : {f}"
         mult = b * c
         first_bracket = a - mult
         second_bracket = d + e
         div = second_bracket / f
-        result = round(first_bracket + div, 2)
+        result = first_bracket + div
 
-        loesung = f"{result:.2f}"
+        loesung = fmt(result)
         erklaerung = (
-            f"Schritt 1: {b} · {c} = {mult}\n"
-            f"Schritt 2: {a} - {mult} = {first_bracket}\n"
-            f"Schritt 3: {d} + {e} = {second_bracket}\n"
-            f"Schritt 4: {second_bracket} : {f} = {div:.2f}\n"
-            f"Schritt 5: {first_bracket} + {div:.2f} = {result:.2f}"
+            f"Schritt 1: {fmt(b)} · {fmt(c)} = {fmt(mult)}\n"
+            f"Schritt 2: {fmt(a)} - {fmt(mult)} = {fmt(first_bracket)}\n"
+            f"Schritt 3: {fmt(d)} + {fmt(e)} = {fmt(second_bracket)}\n"
+            f"Schritt 4: {fmt(second_bracket)} : {fmt(f)} = {fmt(div)}\n"
+            f"Schritt 5: {fmt(first_bracket)} + {fmt(div)} = {loesung}"
         )
 
         return aufgabe, loesung, erklaerung
 
     def _template_negativ(self) -> Tuple[str, str, str]:
         """Mit negativen Zahlen"""
-        a = random.randint(20, 50)
-        b = random.randint(2, 8)
-        c = random.randint(3, 9)
-        d = random.randint(15, 40)
-        e = random.randint(5, 20)
-        f = random.randint(2, 6)
+        while True:
+            a = random.randint(20, 50)
+            b = random.randint(2, 8)
+            c = random.randint(3, 9)
+            d = random.randint(15, 40)
+            e = random.randint(5, 20)
+            f = random.randint(2, 6)
+            if self._register_task("grundrechnung/negativ", [a, b, c, d, e, f]):
+                break
 
         aufgabe = f"-{a} + (-{b}) · {c} - ({d} + {e}) : {f}"
         neg_mult = -b * c
         sum_de = d + e
         div = sum_de / f
-        result = round(-a + neg_mult - div, 2)
+        result = -a + neg_mult - div
 
-        loesung = f"{result:.2f}"
+        loesung = fmt(result)
         erklaerung = (
-            f"Schritt 1: (-{b}) · {c} = {neg_mult}\n"
-            f"Schritt 2: {d} + {e} = {sum_de}\n"
-            f"Schritt 3: {sum_de} : {f} = {div:.2f}\n"
-            f"Schritt 4: -{a} + {neg_mult} = {-a + neg_mult}\n"
-            f"Schritt 5: {-a + neg_mult} - {div:.2f} = {result:.2f}"
+            f"Schritt 1: (-{fmt(b)}) · {fmt(c)} = {fmt(neg_mult)}\n"
+            f"Schritt 2: {fmt(d)} + {fmt(e)} = {fmt(sum_de)}\n"
+            f"Schritt 3: {fmt(sum_de)} : {fmt(f)} = {fmt(div)}\n"
+            f"Schritt 4: -{fmt(a)} + {fmt(neg_mult)} = {fmt(-a + neg_mult)}\n"
+            f"Schritt 5: {fmt(-a + neg_mult)} - {fmt(div)} = {loesung}"
         )
 
         return aufgabe, loesung, erklaerung
@@ -717,7 +791,7 @@ class AufgabenGenerator:
 
             if coeff_x != 0:
                 x = -const / coeff_x
-                loesung = f"x = {x:.2f}"
+                loesung = f"x = {fmt(x)}"
                 erklaerung = (
                     f"Ausmultiplizieren und zusammenfassen: {coeff_x}x + {const} = 0"
                 )
@@ -750,8 +824,8 @@ class AufgabenGenerator:
             const = -Fraction(a1) * dec_frac + frac * Fraction(c1)
 
             x = (right - const) / coeff_x
-            loesung = f"x = {float(x):.3f}"
-            erklaerung = f"Mit Brüchen auflösen: {float(coeff_x):.3f}x + {float(const):.3f} = {float(right):.3f}"
+            loesung = f"x = {fmt(float(x),3)}"
+            erklaerung = f"Mit Brüchen auflösen: {fmt(float(coeff_x),3)}x + {fmt(float(const),3)} = {fmt(float(right),3)}"
 
         return aufgabe, loesung, erklaerung
 
@@ -773,12 +847,14 @@ class AufgabenGenerator:
 
     def _template_gehalt(self) -> Tuple[str, str, str]:
         """Gehaltsberechnung"""
-        beruf = random.choice(list(self.austrian_data.berufe.keys()))
-        beruf_data = self.austrian_data.berufe[beruf]
-
-        gehalt = random.randint(beruf_data["gehalt_min"], beruf_data["gehalt_max"])
-        stunden_alt = random.randint(*beruf_data["stunden"])
-        stunden_neu = random.randint(30, stunden_alt - 2)
+        while True:
+            beruf = random.choice(list(self.austrian_data.berufe.keys()))
+            beruf_data = self.austrian_data.berufe[beruf]
+            gehalt = random.randint(beruf_data["gehalt_min"], beruf_data["gehalt_max"])
+            stunden_alt = random.randint(*beruf_data["stunden"])
+            stunden_neu = random.randint(30, stunden_alt - 2)
+            if self._register_task("text/gehalt", [gehalt, stunden_alt, stunden_neu]):
+                break
 
         aufgabe = (
             f"Ein {beruf.replace('_', '-').title()} verdient {gehalt}€ bei {stunden_alt} Stunden/Woche. "
@@ -790,35 +866,40 @@ class AufgabenGenerator:
         neues_gehalt = stundenlohn * stunden_neu
         prozent = ((gehalt - neues_gehalt) / gehalt) * 100
 
-        loesung = f"a) {neues_gehalt:.2f}€, b) -{prozent:.1f}%"
+        loesung = f"a) {fmt(neues_gehalt)}€, b) -{fmt(prozent,1)}%"
         erklaerung = (
-            f"Stundenlohn: {stundenlohn:.2f}€/h, Neues Gehalt: {neues_gehalt:.2f}€"
+            f"Stundenlohn: {fmt(stundenlohn)}€/h, Neues Gehalt: {fmt(neues_gehalt)}€"
         )
 
         return aufgabe, loesung, erklaerung
 
     def _template_material(self) -> Tuple[str, str, str]:
         """Materialverbrauch"""
-        material = random.choice(list(self.austrian_data.materialien.keys()))
-        material_data = self.austrian_data.materialien[material]
-
-        laenge = random.randint(200, 500)  # cm
-        breite = random.randint(10, 30)  # cm
-        hoehe = random.randint(5, 20)  # cm
-
-        preis_map = {
-            "stahl": "stahl_kg",
-            "aluminium": "aluminium_kg",
-            "kupfer": "kupfer_kg",
-            "beton": "beton_m3",
-            "holz_fichte": None,
-        }
-        mat_key = material.split("_")[0]
-        preis_key = preis_map.get(mat_key)
-        if preis_key is None:
-            material = "stahl"
+        while True:
+            material = random.choice(list(self.austrian_data.materialien.keys()))
             material_data = self.austrian_data.materialien[material]
-            preis_key = "stahl_kg"
+            laenge = random.randint(200, 500)
+            breite = random.randint(10, 30)
+            hoehe = random.randint(5, 20)
+            preis_map = {
+                "stahl": "stahl_kg",
+                "aluminium": "aluminium_kg",
+                "kupfer": "kupfer_kg",
+                "beton": "beton_m3",
+                "holz_fichte": None,
+            }
+            mat_key = material.split("_")[0]
+            preis_key = preis_map.get(mat_key)
+            if preis_key is None:
+                material = "stahl"
+                material_data = self.austrian_data.materialien[material]
+                preis_key = "stahl_kg"
+            if self._register_task(
+                "text/material",
+                [laenge, breite, hoehe, self.austrian_data.preise[preis_key]],
+            ):
+                break
+
         preis_wert = self.austrian_data.preise[preis_key]
         einheit = "€/kg" if preis_key.endswith("_kg") else "€/m³"
 
@@ -838,16 +919,21 @@ class AufgabenGenerator:
         else:
             kosten = volumen_m3 * preis_wert
 
-        loesung = f"a) {gewicht:.2f}kg, b) {kosten:.2f}€"
-        erklaerung = f"Volumen: {volumen_dm3:.2f}dm³, Gewicht: {gewicht:.2f}kg"
+        loesung = f"a) {fmt(gewicht)}kg, b) {fmt(kosten)}€"
+        erklaerung = f"Volumen: {fmt(volumen_dm3)}dm³, Gewicht: {fmt(gewicht)}kg"
 
         return aufgabe, loesung, erklaerung
 
     def _template_produktion(self) -> Tuple[str, str, str]:
         """Produktionsaufgabe"""
-        maschinen = random.randint(3, 8)
-        zeit = random.randint(20, 50)
-        neue_maschinen = random.randint(maschinen + 2, maschinen * 2)
+        while True:
+            maschinen = random.randint(3, 8)
+            zeit = random.randint(20, 50)
+            neue_maschinen = random.randint(maschinen + 2, maschinen * 2)
+            if self._register_task(
+                "text/produktion", [maschinen, zeit, neue_maschinen]
+            ):
+                break
 
         aufgabe = (
             f"{maschinen} CNC-Fräsmaschinen produzieren einen Auftrag in {zeit} Stunden. "
@@ -855,13 +941,12 @@ class AufgabenGenerator:
             f"(Geben Sie das Ergebnis in Stunden und Minuten an)"
         )
 
-        # Indirekt proportional
         neue_zeit = (maschinen * zeit) / neue_maschinen
         stunden = int(neue_zeit)
         minuten = int((neue_zeit - stunden) * 60)
 
         loesung = f"{stunden}h {minuten}min"
-        erklaerung = f"Indirekt proportional: {maschinen}·{zeit}/{neue_maschinen} = {neue_zeit:.2f}h"
+        erklaerung = f"Indirekt proportional: {maschinen}·{zeit}/{neue_maschinen} = {fmt(neue_zeit)}h"
 
         return aufgabe, loesung, erklaerung
 
@@ -876,10 +961,15 @@ class AufgabenGenerator:
 
     def _template_pumpsystem(self) -> Tuple[str, str, str]:
         """Komplexes Pumpsystem"""
-        tank = random.randint(1000, 3000)
-        pumpe_a_zeit = random.randint(20, 40)
-        pumpe_b_zeit = random.randint(30, 60)
-        fuellstand = random.randint(40, 70)
+        while True:
+            tank = random.randint(1000, 3000)
+            pumpe_a_zeit = random.randint(20, 40)
+            pumpe_b_zeit = random.randint(30, 60)
+            fuellstand = random.randint(40, 70)
+            if self._register_task(
+                "text/pumpsystem", [tank, pumpe_a_zeit, pumpe_b_zeit, fuellstand]
+            ):
+                break
 
         aufgabe = (
             f"Ein Tank fasst {tank}L. Pumpe A füllt ihn in {pumpe_a_zeit}min, "
@@ -889,35 +979,42 @@ class AufgabenGenerator:
             f"c) Reicht der Tank für 5 Maschinen à 25L/h für 8h Betrieb?"
         )
 
-        rate_a = tank / pumpe_a_zeit  # L/min
-        rate_b = tank / pumpe_b_zeit  # L/min
+        rate_a = tank / pumpe_a_zeit
+        rate_b = tank / pumpe_b_zeit
         rate_gesamt = rate_a + rate_b
 
         zeit_gesamt = tank / rate_gesamt
         restmenge = tank * (1 - fuellstand / 100)
         restzeit = restmenge / rate_gesamt
 
-        verbrauch = 5 * 25 * 8  # L
+        verbrauch = 5 * 25 * 8
         reicht = "Ja" if tank >= verbrauch else "Nein"
 
-        loesung = f"a) {zeit_gesamt:.1f}min, b) {restzeit:.1f}min, c) {reicht} ({verbrauch}L Bedarf)"
-        erklaerung = f"Füllraten: A={rate_a:.1f}L/min, B={rate_b:.1f}L/min, Gesamt={rate_gesamt:.1f}L/min"
+        loesung = f"a) {fmt(zeit_gesamt,1)}min, b) {fmt(restzeit,1)}min, c) {reicht} ({verbrauch}L Bedarf)"
+        erklaerung = f"Füllraten: A={fmt(rate_a,1)}L/min, B={fmt(rate_b,1)}L/min, Gesamt={fmt(rate_gesamt,1)}L/min"
 
         return aufgabe, loesung, erklaerung
 
     def _template_mischung(self) -> Tuple[str, str, str]:
         """Mischungsaufgabe"""
-        sorte_a_preis = random.randint(80, 120) / 100  # €/kg
-        sorte_b_preis = random.randint(150, 200) / 100  # €/kg
-        menge_a = random.randint(20, 40)
-        menge_b = random.randint(10, 30)
+        while True:
+            sorte_a_preis = random.randint(80, 120) / 100
+            sorte_b_preis = random.randint(150, 200) / 100
+            menge_a = random.randint(20, 40)
+            menge_b = random.randint(10, 30)
+            zielpreis = (sorte_a_preis + sorte_b_preis) / 2
+            x = menge_a * (zielpreis - sorte_a_preis) / (sorte_b_preis - zielpreis)
+            if x >= 0 and self._register_task(
+                "text/mischung", [menge_a, menge_b, int(x * 10)]
+            ):
+                break
 
         aufgabe = (
             f"Eine Metalllegierung wird aus zwei Sorten gemischt: "
             f"Sorte A kostet {sorte_a_preis}€/kg, Sorte B kostet {sorte_b_preis}€/kg. "
             f"Für eine Mischung werden {menge_a}kg von A und {menge_b}kg von B verwendet. "
             f"a) Gesamtkosten? b) Durchschnittspreis pro kg? "
-            f"c) Wie viel kg von B für einen Durchschnittspreis von {(sorte_a_preis + sorte_b_preis)/2:.2f}€/kg?"
+            f"c) Wie viel kg von B für einen Durchschnittspreis von {fmt(zielpreis)}€/kg?"
         )
 
         kosten_a = sorte_a_preis * menge_a
@@ -926,25 +1023,28 @@ class AufgabenGenerator:
         gesamtmenge = menge_a + menge_b
         durchschnitt = gesamtkosten / gesamtmenge
 
-        # Für Teil c: Berechnung mit Mischungskreuz
-        zielpreis = (sorte_a_preis + sorte_b_preis) / 2
-        # menge_a * sorte_a_preis + x * sorte_b_preis = (menge_a + x) * zielpreis
-        x = menge_a * (zielpreis - sorte_a_preis) / (sorte_b_preis - zielpreis)
-
-        loesung = f"a) {gesamtkosten:.2f}€, b) {durchschnitt:.2f}€/kg, c) {x:.1f}kg"
-        erklaerung = f"Kosten A: {kosten_a:.2f}€, Kosten B: {kosten_b:.2f}€"
+        loesung = (
+            f"a) {fmt(gesamtkosten)}€, b) {fmt(durchschnitt)}€/kg, c) {fmt(x,1)}kg"
+        )
+        erklaerung = f"Kosten A: {fmt(kosten_a)}€, Kosten B: {fmt(kosten_b)}€"
 
         return aufgabe, loesung, erklaerung
 
     def _template_logistik(self) -> Tuple[str, str, str]:
         """Logistikaufgabe"""
-        lkw_kapazitaet = random.randint(8000, 12000)  # kg
-        paletten = random.randint(20, 30)
-        gewicht_palette = random.randint(200, 400)  # kg
-        strecke = random.randint(200, 500)  # km
-        verbrauch = random.randint(25, 35)  # L/100km
-        diesel_preis = self.austrian_data.preise["diesel_l"]
+        while True:
+            lkw_kapazitaet = random.randint(8000, 12000)
+            paletten = random.randint(20, 30)
+            gewicht_palette = random.randint(200, 400)
+            strecke = random.randint(200, 500)
+            verbrauch = random.randint(25, 35)
+            if self._register_task(
+                "text/logistik",
+                [lkw_kapazitaet, paletten, gewicht_palette, strecke, verbrauch],
+            ):
+                break
 
+        diesel_preis = self.austrian_data.preise["diesel_l"]
         aufgabe = (
             f"Ein LKW (Nutzlast {lkw_kapazitaet}kg) soll {paletten} Paletten à {gewicht_palette}kg "
             f"über {strecke}km transportieren. Verbrauch: {verbrauch}L/100km, Diesel: {diesel_preis}€/L. "
@@ -958,8 +1058,8 @@ class AufgabenGenerator:
         diesel_kosten = diesel_gesamt * diesel_preis
         kosten_pro_palette = diesel_kosten / paletten
 
-        loesung = f"a) {fahrten} Fahrten, b) {diesel_kosten:.2f}€, c) {kosten_pro_palette:.2f}€/Palette"
-        erklaerung = f"Gesamtgewicht: {gesamtgewicht}kg, Diesel: {diesel_gesamt:.1f}L"
+        loesung = f"a) {fahrten} Fahrten, b) {fmt(diesel_kosten)}€, c) {fmt(kosten_pro_palette)}€/Palette"
+        erklaerung = f"Gesamtgewicht: {fmt(gesamtgewicht,0,True)}kg, Diesel: {fmt(diesel_gesamt,1)}L"
 
         return aufgabe, loesung, erklaerung
 
@@ -981,7 +1081,7 @@ class AufgabenGenerator:
 
         # 2. Dezimalzahl
         dezimal = round(random.uniform(0.001, 9.999), 3)
-        werte.append(f"{dezimal}")
+        werte.append(fmt(dezimal, 3))
         # Zerlegung in Stellenwerte
         ganz = int(dezimal)
         rest = dezimal - ganz
@@ -995,7 +1095,7 @@ class AufgabenGenerator:
         nenner = random.choice([10, 100, 1000])
         werte.append(f"{zaehler}/{nenner}")
         dezimalwert = zaehler / nenner
-        loesungen.append(f"{dezimalwert} → {int(dezimalwert)}E + Dezimalstellen")
+        loesungen.append(f"{fmt(dezimalwert,3)} → {int(dezimalwert)}E + Dezimalstellen")
 
         # 4. Gemischte Darstellung
         ganz = random.randint(1, 99)
@@ -1119,7 +1219,10 @@ class AufgabenGenerator:
             aufgabe += "```"
 
         loesung = f"Drei Ansichten des {koerper} nach DIN/ISO"
-        erklaerung = "Vorderansicht links unten, Draufsicht darüber, Seitenansicht rechts neben Vorderansicht"
+        erklaerung = (
+            "Anordnung nach 1. Winkelprojektion (DIN/ISO): Draufsicht über der "
+            "Vorderansicht, Seitenansicht (linke Ansicht) links von der Vorderansicht."
+        )
 
         return aufgabe, loesung, erklaerung
 
@@ -1176,19 +1279,18 @@ class AufgabenGenerator:
         ):
             # Formatierung der Zahl je nach Größe
             if zahl >= 1000:
-                zahl_str = f"{zahl:.2f}"
+                zahl_str = fmt(zahl, 2)
             else:
-                zahl_str = f"{zahl:.4f}"
+                zahl_str = fmt(zahl, 4)
 
             aufgabe += f"{i}. {zahl_str} (≈{stelle}) = _____\n"
 
-            # Formatierung der gerundeten Zahl
-            if isinstance(gerundet, int):
-                loesung += f"{i}. {gerundet}\n"
+            if isinstance(gerundet, int) or float(gerundet).is_integer():
+                loesung += f"{i}. {fmt(gerundet)}\n"
             elif gerundet >= 1000:
-                loesung += f"{i}. {gerundet:.0f}\n"
+                loesung += f"{i}. {fmt(gerundet,0)}\n"
             else:
-                loesung += f"{i}. {gerundet:.4f}".rstrip("0").rstrip(".") + "\n"
+                loesung += f"{i}. {fmt(gerundet,4)}".rstrip("0").rstrip(",") + "\n"
 
         erklaerung = "E=Einer, z=Zehntel, h=Hundertstel, t=Tausendstel, Z=Zehner, H=Hunderter, T=Tausender, ZT=Zehntausender, HT=Hunderttausender"
 
@@ -1225,13 +1327,13 @@ class AufgabenGenerator:
             if ergebnis is not None:
                 # Formatierung ohne wissenschaftliche Notation
                 if ergebnis >= 10000:
-                    loesung += f"{i}. {int(ergebnis)} {nach}\n"
+                    loesung += f"{i}. {fmt(ergebnis,0)} {nach}\n"
                 elif ergebnis >= 1:
-                    loesung += f"{i}. {ergebnis:.2f} {nach}\n"
+                    loesung += f"{i}. {fmt(ergebnis)} {nach}\n"
                 elif ergebnis >= 0.01:
-                    loesung += f"{i}. {ergebnis:.4f} {nach}\n"
+                    loesung += f"{i}. {fmt(ergebnis,4)} {nach}\n"
                 else:
-                    loesung += f"{i}. {ergebnis:.6f} {nach}\n"
+                    loesung += f"{i}. {fmt(ergebnis,6)} {nach}\n"
             else:
                 loesung += f"{i}. [Konvertierung nicht möglich]\n"
 
@@ -1287,9 +1389,9 @@ class AufgabenGenerator:
             kosten_verschnitt = kosten * (1 + verschnitt / 100)
 
             loesung = (
-                f"a) {gewicht:.2f}kg, b) {kosten:.2f}€, c) {kosten_verschnitt:.2f}€"
+                f"a) {fmt(gewicht)}kg, b) {fmt(kosten)}€, c) {fmt(kosten_verschnitt)}€"
             )
-            erklaerung = f"Volumen: {volumen:.2f}dm³, Gewicht: {gewicht:.2f}kg"
+            erklaerung = f"Volumen: {fmt(volumen)}dm³, Gewicht: {fmt(gewicht)}kg"
 
         return aufgabe, loesung, erklaerung
 
@@ -1297,7 +1399,13 @@ class AufgabenGenerator:
 class TestGenerator:
     """Hauptklasse für Testgenerierung"""
 
-    def __init__(self, schwierigkeit: Schwierigkeit = Schwierigkeit.MITTEL):
+    def __init__(
+        self,
+        schwierigkeit: Schwierigkeit = Schwierigkeit.MITTEL,
+        seed: Optional[int] = None,
+    ):
+        if seed is not None:
+            random.seed(seed)
         self.schwierigkeit = schwierigkeit
         self.generator = AufgabenGenerator(schwierigkeit)
         self.test_content = ""
@@ -1377,6 +1485,15 @@ class TestGenerator:
             self.test_content += f"**b.{i})** {aufgabe} = _____ **(3 Punkte)**\n\n"
             self.solutions += f"**b.{i})** {aufgabe} = **{loesung}**\n"
             self.solutions += f"   {erklaerung}\n\n"
+            self.detailed_solutions.append(
+                {
+                    "nummer": f"1.b.{i}",
+                    "aufgabe": aufgabe,
+                    "loesung": loesung,
+                    "erklaerung": erklaerung,
+                    "punkte": punkte,
+                }
+            )
 
         # 2 schwere (je 5 Punkte)
         for i, punkte in enumerate([5, 5], start=1):
@@ -1384,6 +1501,15 @@ class TestGenerator:
             self.test_content += f"**c.{i})** {aufgabe} = _____ **(5 Punkte)**\n\n"
             self.solutions += f"**c.{i})** {aufgabe} = **{loesung}**\n"
             self.solutions += f"   {erklaerung}\n\n"
+            self.detailed_solutions.append(
+                {
+                    "nummer": f"1.c.{i}",
+                    "aufgabe": aufgabe,
+                    "loesung": loesung,
+                    "erklaerung": erklaerung,
+                    "punkte": punkte,
+                }
+            )
 
         self.test_content += "\n---\n\n"
 
@@ -1406,11 +1532,29 @@ class TestGenerator:
         aufgabe, loesung, erklaerung = self.generator.generate_stellenwerttabelle()
         self.test_content += f"**b) Stellenwerttabelle (5 Punkte)**\n{aufgabe}\n\n"
         self.solutions += f"**b)** {loesung}\n\n"
+        self.detailed_solutions.append(
+            {
+                "nummer": "2.b",
+                "aufgabe": aufgabe,
+                "loesung": loesung,
+                "erklaerung": erklaerung,
+                "punkte": 5,
+            }
+        )
 
         # Runden (3 Punkte)
         aufgabe, loesung, erklaerung = self.generator.generate_runden()
         self.test_content += f"**c) Runden (3 Punkte)**\n{aufgabe}\n\n"
         self.solutions += f"**c)** {loesung}\n\n"
+        self.detailed_solutions.append(
+            {
+                "nummer": "2.c",
+                "aufgabe": aufgabe,
+                "loesung": loesung,
+                "erklaerung": erklaerung,
+                "punkte": 3,
+            }
+        )
 
         # Einheiten (7 Punkte: 2+2+3)
         self.test_content += "**d) Einheitenumwandlungen (7 Punkte)**\n\n"
@@ -1423,6 +1567,15 @@ class TestGenerator:
             aufgabe, loesung, erklaerung = self.generator.generate_einheiten(niveau)
             self.test_content += f"*{titel} ({punkte} Punkte):*\n{aufgabe}\n"
             self.solutions += f"**d.{niveau})** {loesung}\n"
+            self.detailed_solutions.append(
+                {
+                    "nummer": f"2.d.{niveau}",
+                    "aufgabe": aufgabe,
+                    "loesung": loesung,
+                    "erklaerung": erklaerung,
+                    "punkte": punkte,
+                }
+            )
 
         self.test_content += "\n---\n\n"
 
@@ -1435,11 +1588,29 @@ class TestGenerator:
         aufgabe, loesung, erklaerung = self.generator.generate_textaufgabe(10)
         self.test_content += f"**a) (10 Punkte)**\n{aufgabe}\n\n"
         self.solutions += f"**a)** {loesung}\n   {erklaerung}\n\n"
+        self.detailed_solutions.append(
+            {
+                "nummer": "3.a",
+                "aufgabe": aufgabe,
+                "loesung": loesung,
+                "erklaerung": erklaerung,
+                "punkte": 10,
+            }
+        )
 
         # Schwere Aufgabe (10 Punkte)
         aufgabe, loesung, erklaerung = self.generator.generate_textaufgabe(15)
         self.test_content += f"**b) (10 Punkte)**\n{aufgabe}\n\n"
         self.solutions += f"**b)** {loesung}\n   {erklaerung}\n\n"
+        self.detailed_solutions.append(
+            {
+                "nummer": "3.b",
+                "aufgabe": aufgabe,
+                "loesung": loesung,
+                "erklaerung": erklaerung,
+                "punkte": 10,
+            }
+        )
 
         self.test_content += "\n---\n\n"
 
@@ -1459,6 +1630,15 @@ class TestGenerator:
             self.solutions += (
                 f"**a.{i+1})** {aufgabe} = **{loesung}**\n   {erklaerung}\n\n"
             )
+            self.detailed_solutions.append(
+                {
+                    "nummer": f"4.a.{i+1}",
+                    "aufgabe": aufgabe,
+                    "loesung": loesung,
+                    "erklaerung": erklaerung,
+                    "punkte": 4,
+                }
+            )
 
         # 2 Gleichungen (je 4 Punkte = 8 Punkte)
         self.test_content += "**Gleichungen (8 Punkte)**\n\n"
@@ -1467,11 +1647,29 @@ class TestGenerator:
         aufgabe, loesung, erklaerung = self.generator.generate_gleichung(schwer=False)
         self.test_content += f"**b.1)** {aufgabe} **(4 Punkte)**\n\n"
         self.solutions += f"**b.1)** {loesung}\n   {erklaerung}\n\n"
+        self.detailed_solutions.append(
+            {
+                "nummer": "4.b.1",
+                "aufgabe": aufgabe,
+                "loesung": loesung,
+                "erklaerung": erklaerung,
+                "punkte": 4,
+            }
+        )
 
         # Schwere Gleichung
         aufgabe, loesung, erklaerung = self.generator.generate_gleichung(schwer=True)
         self.test_content += f"**b.2)** {aufgabe} **(4 Punkte)**\n\n"
         self.solutions += f"**b.2)** {loesung}\n   {erklaerung}\n\n"
+        self.detailed_solutions.append(
+            {
+                "nummer": "4.b.2",
+                "aufgabe": aufgabe,
+                "loesung": loesung,
+                "erklaerung": erklaerung,
+                "punkte": 4,
+            }
+        )
 
         self.test_content += "\n---\n\n"
 
@@ -1484,11 +1682,29 @@ class TestGenerator:
         aufgabe, loesung, erklaerung = self.generator.generate_drei_ansichten()
         self.test_content += f"**a) Drei Ansichten (5 Punkte)**\n{aufgabe}\n\n"
         self.solutions += f"**a)** {loesung}\n   {erklaerung}\n\n"
+        self.detailed_solutions.append(
+            {
+                "nummer": "5.a",
+                "aufgabe": aufgabe,
+                "loesung": loesung,
+                "erklaerung": erklaerung,
+                "punkte": 5,
+            }
+        )
 
         # Körpernetz (5 Punkte)
         aufgabe, loesung, erklaerung = self.generator.generate_koerpernetz()
         self.test_content += f"**b) Körpernetz (5 Punkte)**\n{aufgabe}\n\n"
         self.solutions += f"**b)** {loesung}\n   {erklaerung}\n\n"
+        self.detailed_solutions.append(
+            {
+                "nummer": "5.b",
+                "aufgabe": aufgabe,
+                "loesung": loesung,
+                "erklaerung": erklaerung,
+                "punkte": 5,
+            }
+        )
 
         # Geometrie Zeichnung (5 Punkte)
         aufgabe, loesung, erklaerung = self.generator.generate_geometrie(zeichnen=True)
@@ -1496,11 +1712,29 @@ class TestGenerator:
             f"**c) Geometrische Berechnung und Zeichnung (5 Punkte)**\n{aufgabe}\n\n"
         )
         self.solutions += f"**c)** {loesung}\n   {erklaerung}\n\n"
+        self.detailed_solutions.append(
+            {
+                "nummer": "5.c",
+                "aufgabe": aufgabe,
+                "loesung": loesung,
+                "erklaerung": erklaerung,
+                "punkte": 5,
+            }
+        )
 
         # Volumenberechnung (5 Punkte)
         aufgabe, loesung, erklaerung = self.generator.generate_geometrie(zeichnen=False)
         self.test_content += f"**d) Volumen und Gewicht (5 Punkte)**\n{aufgabe}\n\n"
         self.solutions += f"**d)** {loesung}\n   {erklaerung}\n\n"
+        self.detailed_solutions.append(
+            {
+                "nummer": "5.d",
+                "aufgabe": aufgabe,
+                "loesung": loesung,
+                "erklaerung": erklaerung,
+                "punkte": 5,
+            }
+        )
 
     def _add_bewertung(self):
         """Fügt Bewertungsschlüssel hinzu"""
@@ -1739,6 +1973,8 @@ Bestehensgrenze: 60 Punkte
         # Konvertiere Markdown zu LaTeX
         lines = markdown_text.split("\n")
         in_math = False
+        in_list = False
+        in_table = False
 
         def _tex_escape(s: str) -> str:
             return (
@@ -1764,14 +2000,38 @@ Bestehensgrenze: 60 Punkte
             elif line.startswith("*") and line.endswith("*"):
                 latex += f"\\textit{{{_tex_escape(line[1:-1])}}}\n\n"
             elif line.startswith("- "):
+                if not in_list:
+                    latex += "\\begin{itemize}\n"
+                    in_list = True
                 latex += f"\\item {_tex_escape(line[2:])}\n"
-            elif "=" in line and any(
-                op in line for op in ["+", "-", "·", ":", "(", ")"]
-            ):
-                equation = line.replace("·", r"\cdot").replace(":", r"\div")
-                latex += f"$${equation}$$\n"
-            elif line.strip():
-                latex += _tex_escape(line) + "\n\n"
+                continue
+            elif line.startswith("|"):
+                cols = [c.strip() for c in line.strip("|").split("|")]
+                if not in_table:
+                    in_table = True
+                    colspec = " | ".join(["l"] * len(cols))
+                    latex += f"\\begin{{tabular}}{{{colspec}}}\n\\hline\n"
+                latex += " & ".join(_tex_escape(c) for c in cols) + " \\\\n"
+                continue
+            else:
+                if in_list:
+                    latex += "\\end{itemize}\n"
+                    in_list = False
+                if in_table:
+                    latex += "\\hline\n\\end{tabular}\n\n"
+                    in_table = False
+                if "=" in line and any(
+                    op in line for op in ["+", "-", "·", ":", "(", ")"]
+                ):
+                    equation = line.replace("·", r"\cdot").replace(":", r"\div")
+                    latex += f"$${equation}$$\n"
+                elif line.strip():
+                    latex += _tex_escape(line) + "\n\n"
+
+        if in_list:
+            latex += "\\end{itemize}\n"
+        if in_table:
+            latex += "\\hline\n\\end{tabular}\n"
 
         latex += r"\end{document}"
 
@@ -1789,29 +2049,38 @@ def main():
 """
     )
 
-    # Schwierigkeit wählen
-    print("Wählen Sie die Schwierigkeit:")
-    print("1. Einfach")
-    print("2. Mittel (Standard)")
-    print("3. Schwer")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--stufe", choices=["einfach", "mittel", "schwer"])
+    parser.add_argument("--seed", type=int)
+    args = parser.parse_args()
 
-    choice = input("\nIhre Wahl (1-3, Enter für Standard): ").strip()
-
-    if choice == "1":
-        schwierigkeit = Schwierigkeit.EINFACH
-        print("→ Schwierigkeit: EINFACH")
-    elif choice == "3":
-        schwierigkeit = Schwierigkeit.SCHWER
-        print("→ Schwierigkeit: SCHWER")
+    if args.stufe:
+        map_stufe = {
+            "einfach": Schwierigkeit.EINFACH,
+            "mittel": Schwierigkeit.MITTEL,
+            "schwer": Schwierigkeit.SCHWER,
+        }
+        schwierigkeit = map_stufe[args.stufe]
     else:
-        schwierigkeit = Schwierigkeit.MITTEL
-        print("→ Schwierigkeit: MITTEL (Standard)")
+        print("Wählen Sie die Schwierigkeit:")
+        print("1. Einfach")
+        print("2. Mittel (Standard)")
+        print("3. Schwer")
+        choice = input("\nIhre Wahl (1-3, Enter für Standard): ").strip()
+        if choice == "1":
+            schwierigkeit = Schwierigkeit.EINFACH
+            print("→ Schwierigkeit: EINFACH")
+        elif choice == "3":
+            schwierigkeit = Schwierigkeit.SCHWER
+            print("→ Schwierigkeit: SCHWER")
+        else:
+            schwierigkeit = Schwierigkeit.MITTEL
+            print("→ Schwierigkeit: MITTEL (Standard)")
 
     print("\nGeneriere Test...")
     print("-" * 50)
 
-    # Test generieren
-    generator = TestGenerator(schwierigkeit)
+    generator = TestGenerator(schwierigkeit, seed=args.seed)
     test_content, solutions, detailed = generator.generate_complete_test()
 
     # Ausgabe
