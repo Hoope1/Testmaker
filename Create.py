@@ -362,7 +362,7 @@ class UnitConverter:
     }
 
     @classmethod
-    def convert(cls, value: float, from_unit: str, to_unit: str) -> float:
+    def convert(cls, value: float, from_unit: str, to_unit: str) -> Optional[float]:
         """Konvertiert zwischen Einheiten"""
         if from_unit not in cls.conversions or to_unit not in cls.conversions:
             return None
@@ -1979,35 +1979,42 @@ Bestehensgrenze: 60 Punkte
         in_math = False
         in_list = False
         in_table = False
+        in_code = False
+        expected_cols = 0
 
         def _tex_escape(s: str) -> str:
             return (
-                s.replace("\\", "\\textbackslash{}")
-                .replace("&", "\\&")
-                .replace("%", "\\%")
-                .replace("$", "\\$")
-                .replace("#", "\\#")
-                .replace("_", "\\_")
-                .replace("{", "\\{")
-                .replace("}", "\\}")
-                .replace("~", "\\textasciitilde{}")
-                .replace("^", "\\textasciicircum{}")
+                s.replace("\\", "\textbackslash{}")
+                .replace("&", "\&")
+                .replace("%", "\%")
+                .replace("$", "\$")
+                .replace("#", "\#")
+                .replace("_", "\_")
+                .replace("{", "\{")
+                .replace("}", "\}")
+                .replace("~", "\textasciitilde{}")
+                .replace("^", "\textasciicircum{}")
             )
 
         for line in lines:
+            if line.strip().startswith("```"):
+                in_code = not in_code
+                continue
+            if in_code:
+                continue
             if line.startswith("## "):
-                latex += f"\\section{{{_tex_escape(line[3:])}}}\n"
+                latex += f"\section{{{_tex_escape(line[3:])}}}\n"
             elif line.startswith("### "):
-                latex += f"\\subsection{{{_tex_escape(line[4:])}}}\n"
+                latex += f"\subsection{{{_tex_escape(line[4:])}}}\n"
             elif line.startswith("**") and line.endswith("**"):
-                latex += f"\\textbf{{{_tex_escape(line[2:-2])}}}\n\n"
+                latex += f"\textbf{{{_tex_escape(line[2:-2])}}}\n\n"
             elif line.startswith("*") and line.endswith("*"):
-                latex += f"\\textit{{{_tex_escape(line[1:-1])}}}\n\n"
+                latex += f"\textit{{{_tex_escape(line[1:-1])}}}\n\n"
             elif line.startswith("- "):
                 if not in_list:
-                    latex += "\\begin{itemize}\n"
+                    latex += "\begin{itemize}\n"
                     in_list = True
-                latex += f"\\item {_tex_escape(line[2:])}\n"
+                latex += f"\item {_tex_escape(line[2:])}\n"
                 continue
             elif line.startswith("|"):
                 cols = [c.strip() for c in line.strip("|").split("|")]
@@ -2015,16 +2022,22 @@ Bestehensgrenze: 60 Punkte
                     continue
                 if not in_table:
                     in_table = True
-                    colspec = " | ".join(["l"] * len(cols))
-                    latex += f"\\begin{{tabular}}{{{colspec}}}\\n\\hline\\n"
-                latex += " & ".join(_tex_escape(c) for c in cols) + " \\n"
+                    expected_cols = len(cols)
+                    colspec = " | ".join(["l"] * expected_cols)
+                    latex += f"\begin{{tabular}}{{{colspec}}}\n\hline\n"
+                else:
+                    if len(cols) < expected_cols:
+                        cols += [""] * (expected_cols - len(cols))
+                    elif len(cols) > expected_cols:
+                        cols = cols[:expected_cols]
+                latex += " & ".join(_tex_escape(c) for c in cols) + " \\\n"
                 continue
             else:
                 if in_list:
-                    latex += "\\end{itemize}\n"
+                    latex += "\end{itemize}\n"
                     in_list = False
                 if in_table:
-                    latex += "\\hline\n\\end{tabular}\n\n"
+                    latex += "\hline\n\end{tabular}\n\n"
                     in_table = False
                 if "=" in line and any(
                     op in line for op in ["+", "-", "·", ":", "(", ")"]
@@ -2035,9 +2048,9 @@ Bestehensgrenze: 60 Punkte
                     latex += _tex_escape(line) + "\n\n"
 
         if in_list:
-            latex += "\\end{itemize}\n"
+            latex += "\end{itemize}\n"
         if in_table:
-            latex += "\\hline\n\\end{tabular}\n"
+            latex += "\hline\n\end{tabular}\n"
 
         latex += r"\end{document}"
 
