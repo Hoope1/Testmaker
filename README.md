@@ -1,5 +1,13 @@
 Hier sind die wichtigsten Punkte:
 
+## Sensible Daten
+Der Ordner `Ausgangsmaterial` enthält vertrauliche Dokumente und wird nicht versioniert.
+Lokale Kopien sollten verschlüsselt und mit minimalen Rechten betrieben werden.
+- Nutze `scripts/hide_ausgangsmaterial.py`, um den Ordner zu verbergen und Rechte auf den Besitzer zu beschränken.
+- Die Datei `AGENTS.py` gehört ausschließlich in diesen Ordner und bleibt unversioniert.
+- Ein Pre-Commit-Hook (`.pre-commit-config.yaml`) verhindert versehentliche Commits.
+
+
 Ausgangsmaterial:
 - 13 verschiedene Überstiegstests (A, B, C, D, E, F, G, H, I, J, K, L, M) für die technische Basisausbildung
 - Diese Tests waren in deutscher Sprache und deckten verschiedene mathematische Bereiche ab
