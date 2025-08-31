@@ -1,31 +1,23 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Überstiegstest Generator v2.0
-Vollständig überarbeitete Version mit allen Anforderungen
-"""
+"""Überstiegstest Generator v2.0 Vollständig überarbeitete Version mit allen
+Anforderungen."""
 
-import random
-import math
-import json
-import re
-import ast
-import operator
 import argparse
+import ast
+import json
+import math
+import operator
+import random
 import sys
-from fractions import Fraction
-from typing import Tuple, List, Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
-from datetime import datetime
-import os
+from fractions import Fraction
 
 # Für Word-Export
 try:
     from docx import Document
-    from docx.shared import Pt
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.shared import Pt
 
     HAS_DOCX = True
 except ImportError:
@@ -41,7 +33,7 @@ try:
     HAS_LATEX = (
         subprocess.run(["pdflatex", "--version"], capture_output=True).returncode == 0
     )
-except:
+except Exception:
     HAS_LATEX = False
 
 
@@ -55,7 +47,7 @@ def fmt_int_or_dec(x: float, nd_if_dec: int = 2) -> str:
 
 
 class Schwierigkeit(Enum):
-    """Schwierigkeitsgrade für den Test"""
+    """Schwierigkeitsgrade für den Test."""
 
     EINFACH = 1
     MITTEL = 2
@@ -64,7 +56,7 @@ class Schwierigkeit(Enum):
 
 @dataclass
 class AustrianData:
-    """Realistische österreichische Daten für Textaufgaben"""
+    """Realistische österreichische Daten für Textaufgaben."""
 
     berufe = {
         "elektriker": {"gehalt_min": 2000, "gehalt_max": 2600, "stunden": (38, 42)},
@@ -111,7 +103,7 @@ class AustrianData:
 
 
 class MathSolver:
-    """Robuster mathematischer Solver mit Bruchrechnung"""
+    """Robuster mathematischer Solver mit Bruchrechnung."""
 
     _ops = {
         ast.Add: operator.add,
@@ -121,8 +113,8 @@ class MathSolver:
     }
 
     @staticmethod
-    def evaluate_expression(expr: str) -> Optional[float]:
-        """Sichere Auswertung mathematischer Ausdrücke"""
+    def evaluate_expression(expr: str) -> float | None:
+        """Sichere Auswertung mathematischer Ausdrücke."""
 
         def _eval(node):
             if isinstance(node, (ast.Num, ast.Constant)):
@@ -153,12 +145,12 @@ class MathSolver:
 
     @staticmethod
     def solve_fraction(numerator: int, denominator: int) -> Fraction:
-        """Erstellt und kürzt einen Bruch"""
+        """Erstellt und kürzt einen Bruch."""
         return Fraction(numerator, denominator)
 
     @staticmethod
-    def add_fractions(f1: Fraction, f2: Fraction) -> Tuple[Fraction, int]:
-        """Addiert zwei Brüche und gibt gemeinsamen Nenner zurück"""
+    def add_fractions(f1: Fraction, f2: Fraction) -> tuple[Fraction, int]:
+        """Addiert zwei Brüche und gibt gemeinsamen Nenner zurück."""
         result = f1 + f2
         common_denominator = (
             f1.denominator * f2.denominator // math.gcd(f1.denominator, f2.denominator)
@@ -167,14 +159,14 @@ class MathSolver:
 
     @staticmethod
     def solve_linear_equation(a: float, b: float, c: float, d: float) -> float:
-        """Löst ax + b = cx + d"""
+        """Löst ax + b = cx + d."""
         if a == c:
             return None if b != d else "unendlich viele Lösungen"
         return (d - b) / (a - c)
 
     @staticmethod
     def round_to_place(value: float, place: str) -> float:
-        """Rundet auf die angegebene Stelle"""
+        """Rundet auf die angegebene Stelle."""
         places_map = {
             "t": 3,  # Tausendstel
             "h": 2,  # Hundertstel
@@ -202,15 +194,15 @@ class MathSolver:
 
 
 class QualityControl:
-    """Qualitätskontrolle für generierte Aufgaben"""
+    """Qualitätskontrolle für generierte Aufgaben."""
 
     def __init__(self):
         self.used_templates = []
         self.used_numbers = []
         self.similarity_threshold = 0.7
 
-    def check_similarity(self, numbers: List[int]) -> bool:
-        """Prüft ob Zahlen zu ähnlich zu vorherigen sind"""
+    def check_similarity(self, numbers: list[int]) -> bool:
+        """Prüft ob Zahlen zu ähnlich zu vorherigen sind."""
         if not self.used_numbers:
             return True
 
@@ -222,8 +214,8 @@ class QualityControl:
                 return False
         return True
 
-    def _calculate_similarity(self, list1: List[int], list2: List[int]) -> float:
-        """Berechnet Ähnlichkeit zweier Zahlenlisten"""
+    def _calculate_similarity(self, list1: list[int], list2: list[int]) -> float:
+        """Berechnet Ähnlichkeit zweier Zahlenlisten."""
         if len(list1) != len(list2):
             return 0
 
@@ -234,24 +226,24 @@ class QualityControl:
         )
         return matches / len(list1)
 
-    def register_numbers(self, numbers: List[int]):
-        """Registriert verwendete Zahlen"""
+    def register_numbers(self, numbers: list[int]):
+        """Registriert verwendete Zahlen."""
         self.used_numbers.append(numbers)
 
     def check_template(self, template_id: str) -> bool:
-        """Prüft ob Template kürzlich verwendet wurde"""
+        """Prüft ob Template kürzlich verwendet wurde."""
         if template_id in self.used_templates[-3:]:
             return False
         return True
 
     def register_template(self, template_id: str):
-        """Registriert verwendetes Template"""
+        """Registriert verwendetes Template."""
         self.used_templates.append(template_id)
 
     def validate_range(
         self, value: float, min_val: float, max_val: float, name: str
     ) -> bool:
-        """Validiert ob Wert in realistischem Bereich liegt"""
+        """Validiert ob Wert in realistischem Bereich liegt."""
         if not min_val <= value <= max_val:
             print(
                 f"Warnung: {name} = {value} außerhalb des Bereichs [{min_val}, {max_val}]"
@@ -261,41 +253,41 @@ class QualityControl:
 
 
 class GeometryCalculator:
-    """Berechnet geometrische Aufgaben"""
+    """Berechnet geometrische Aufgaben."""
 
     @staticmethod
     def rectangle_area(length: float, width: float) -> float:
-        """Fläche eines Rechtecks"""
+        """Fläche eines Rechtecks."""
         return length * width
 
     @staticmethod
     def rectangle_perimeter(length: float, width: float) -> float:
-        """Umfang eines Rechtecks"""
+        """Umfang eines Rechtecks."""
         return 2 * (length + width)
 
     @staticmethod
     def triangle_area(base: float, height: float) -> float:
-        """Fläche eines Dreiecks"""
+        """Fläche eines Dreiecks."""
         return base * height / 2
 
     @staticmethod
     def circle_area(radius: float) -> float:
-        """Fläche eines Kreises"""
+        """Fläche eines Kreises."""
         return math.pi * radius**2
 
     @staticmethod
     def circle_perimeter(radius: float) -> float:
-        """Umfang eines Kreises"""
+        """Umfang eines Kreises."""
         return 2 * math.pi * radius
 
     @staticmethod
     def l_shape_area(l1: float, w1: float, l2: float, w2: float) -> float:
-        """Fläche einer L-Form"""
+        """Fläche einer L-Form."""
         return l1 * w1 + l2 * w2
 
     @staticmethod
     def l_shape_perimeter(l1: float, w1: float, l2: float, w2: float) -> float:
-        """Umfang einer L-Form"""
+        """Umfang einer L-Form."""
         pts = [
             (0, 0),
             (l1, 0),
@@ -311,17 +303,17 @@ class GeometryCalculator:
 
     @staticmethod
     def cuboid_volume(length: float, width: float, height: float) -> float:
-        """Volumen eines Quaders"""
+        """Volumen eines Quaders."""
         return length * width * height
 
     @staticmethod
     def cuboid_surface(length: float, width: float, height: float) -> float:
-        """Oberfläche eines Quaders"""
+        """Oberfläche eines Quaders."""
         return 2 * (length * width + length * height + width * height)
 
 
 class UnitConverter:
-    """Konvertiert zwischen verschiedenen Einheiten"""
+    """Konvertiert zwischen verschiedenen Einheiten."""
 
     # Umrechnungsfaktoren zur Basiseinheit
     conversions = {
@@ -362,8 +354,8 @@ class UnitConverter:
     }
 
     @classmethod
-    def convert(cls, value: float, from_unit: str, to_unit: str) -> Optional[float]:
-        """Konvertiert zwischen Einheiten"""
+    def convert(cls, value: float, from_unit: str, to_unit: str) -> float | None:
+        """Konvertiert zwischen Einheiten."""
         if from_unit not in cls.conversions or to_unit not in cls.conversions:
             return None
 
@@ -374,7 +366,7 @@ class UnitConverter:
 
 
 class AufgabenGenerator:
-    """Generiert verschiedene Aufgabentypen"""
+    """Generiert verschiedene Aufgabentypen."""
 
     def __init__(self, schwierigkeit: Schwierigkeit = Schwierigkeit.MITTEL):
         self.schwierigkeit = schwierigkeit
@@ -384,15 +376,15 @@ class AufgabenGenerator:
         self.geometry = GeometryCalculator()
         self.converter = UnitConverter()
 
-    def _register_task(self, template_id: str, numbers: List[int]) -> bool:
+    def _register_task(self, template_id: str, numbers: list[int]) -> bool:
         if not self.quality_control.check_similarity(numbers):
             return False
         self.quality_control.register_template(template_id)
         self.quality_control.register_numbers(numbers)
         return True
 
-    def generate_grundrechnung(self, punkte: int) -> Tuple[str, str, str]:
-        """Generiert Grundrechenaufgabe"""
+    def generate_grundrechnung(self, punkte: int) -> tuple[str, str, str]:
+        """Generiert Grundrechenaufgabe."""
         if punkte <= 2:  # Leicht
             return self._grundrechnung_leicht()
         elif punkte <= 3:  # Mittel
@@ -400,8 +392,8 @@ class AufgabenGenerator:
         else:  # Schwer
             return self._grundrechnung_schwer()
 
-    def _grundrechnung_leicht(self) -> Tuple[str, str, str]:
-        """Leichte Grundrechenaufgabe"""
+    def _grundrechnung_leicht(self) -> tuple[str, str, str]:
+        """Leichte Grundrechenaufgabe."""
         templates = [
             lambda: self._template_addition(),
             lambda: self._template_subtraktion(),
@@ -410,8 +402,8 @@ class AufgabenGenerator:
         ]
         return random.choice(templates)()
 
-    def _template_addition(self) -> Tuple[str, str, str]:
-        """Addition Template"""
+    def _template_addition(self) -> tuple[str, str, str]:
+        """Addition Template."""
         while True:
             a = (
                 random.randint(50, 500)
@@ -440,8 +432,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _template_subtraktion(self) -> Tuple[str, str, str]:
-        """Subtraktion Template"""
+    def _template_subtraktion(self) -> tuple[str, str, str]:
+        """Subtraktion Template."""
         while True:
             a = random.randint(500, 1000)
             b = random.randint(100, 400)
@@ -459,8 +451,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _template_multiplikation(self) -> Tuple[str, str, str]:
-        """Multiplikation Template"""
+    def _template_multiplikation(self) -> tuple[str, str, str]:
+        """Multiplikation Template."""
         while True:
             a = random.randint(12, 25)
             b = random.randint(3, 12)
@@ -474,8 +466,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _template_division(self) -> Tuple[str, str, str]:
-        """Division Template"""
+    def _template_division(self) -> tuple[str, str, str]:
+        """Division Template."""
         while True:
             b = random.randint(5, 15)
             result = random.randint(10, 50)
@@ -489,8 +481,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _grundrechnung_mittel(self) -> Tuple[str, str, str]:
-        """Mittlere Grundrechenaufgabe mit Klammern"""
+    def _grundrechnung_mittel(self) -> tuple[str, str, str]:
+        """Mittlere Grundrechenaufgabe mit Klammern."""
         templates = [
             lambda: self._template_klammer_plus(),
             lambda: self._template_klammer_minus(),
@@ -498,8 +490,8 @@ class AufgabenGenerator:
         ]
         return random.choice(templates)()
 
-    def _template_klammer_plus(self) -> Tuple[str, str, str]:
-        """Klammer mit Addition"""
+    def _template_klammer_plus(self) -> tuple[str, str, str]:
+        """Klammer mit Addition."""
         while True:
             a = random.randint(80, 150)
             b = random.randint(10, 30)
@@ -519,8 +511,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _template_klammer_minus(self) -> Tuple[str, str, str]:
-        """Klammer mit Subtraktion"""
+    def _template_klammer_minus(self) -> tuple[str, str, str]:
+        """Klammer mit Subtraktion."""
         while True:
             a = random.randint(20, 40)
             b = random.randint(10, 25)
@@ -540,8 +532,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _template_klammer_mal(self) -> Tuple[str, str, str]:
-        """Klammer mit Multiplikation"""
+    def _template_klammer_mal(self) -> tuple[str, str, str]:
+        """Klammer mit Multiplikation."""
         while True:
             a = random.randint(100, 200)
             b = random.randint(5, 15)
@@ -561,8 +553,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _grundrechnung_schwer(self) -> Tuple[str, str, str]:
-        """Schwere Grundrechenaufgabe mit verschachtelten Klammern"""
+    def _grundrechnung_schwer(self) -> tuple[str, str, str]:
+        """Schwere Grundrechenaufgabe mit verschachtelten Klammern."""
         templates = [
             lambda: self._template_verschachtelt1(),
             lambda: self._template_verschachtelt2(),
@@ -570,8 +562,8 @@ class AufgabenGenerator:
         ]
         return random.choice(templates)()
 
-    def _template_verschachtelt1(self) -> Tuple[str, str, str]:
-        """Verschachtelte Klammern Typ 1"""
+    def _template_verschachtelt1(self) -> tuple[str, str, str]:
+        """Verschachtelte Klammern Typ 1."""
         while True:
             a = random.randint(100, 200)
             b = random.randint(8, 20)
@@ -599,8 +591,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _template_verschachtelt2(self) -> Tuple[str, str, str]:
-        """Verschachtelte Klammern Typ 2"""
+    def _template_verschachtelt2(self) -> tuple[str, str, str]:
+        """Verschachtelte Klammern Typ 2."""
         while True:
             a = random.randint(150, 250)
             b = random.randint(20, 40)
@@ -629,8 +621,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _template_negativ(self) -> Tuple[str, str, str]:
-        """Mit negativen Zahlen"""
+    def _template_negativ(self) -> tuple[str, str, str]:
+        """Mit negativen Zahlen."""
         while True:
             a = random.randint(20, 50)
             b = random.randint(2, 8)
@@ -658,8 +650,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def generate_bruchaufgabe(self, punkte: int) -> Tuple[str, str, str]:
-        """Generiert Bruchaufgabe mit Nenner < 100"""
+    def generate_bruchaufgabe(self, punkte: int) -> tuple[str, str, str]:
+        """Generiert Bruchaufgabe mit Nenner < 100."""
         if punkte <= 4:
             niveau = 1 if self.schwierigkeit == Schwierigkeit.EINFACH else 2
         else:
@@ -771,8 +763,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def generate_gleichung(self, schwer: bool = False) -> Tuple[str, str, str]:
-        """Generiert Gleichung"""
+    def generate_gleichung(self, schwer: bool = False) -> tuple[str, str, str]:
+        """Generiert Gleichung."""
         if not schwer:
             # Mittlere Gleichung: 3 Klammern, keine Brüche
             a1, b1, c1 = (
@@ -831,15 +823,15 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def generate_textaufgabe(self, punkte: int) -> Tuple[str, str, str]:
-        """Generiert realistische Textaufgabe"""
+    def generate_textaufgabe(self, punkte: int) -> tuple[str, str, str]:
+        """Generiert realistische Textaufgabe."""
         if punkte <= 10:
             return self._textaufgabe_mittel()
         else:
             return self._textaufgabe_schwer()
 
-    def _textaufgabe_mittel(self) -> Tuple[str, str, str]:
-        """Mittlere Textaufgabe aus Handwerk/Technik"""
+    def _textaufgabe_mittel(self) -> tuple[str, str, str]:
+        """Mittlere Textaufgabe aus Handwerk/Technik."""
         templates = [
             self._template_gehalt,
             self._template_material,
@@ -847,8 +839,8 @@ class AufgabenGenerator:
         ]
         return random.choice(templates)()
 
-    def _template_gehalt(self) -> Tuple[str, str, str]:
-        """Gehaltsberechnung"""
+    def _template_gehalt(self) -> tuple[str, str, str]:
+        """Gehaltsberechnung."""
         while True:
             beruf = random.choice(list(self.austrian_data.berufe.keys()))
             beruf_data = self.austrian_data.berufe[beruf]
@@ -875,8 +867,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _template_material(self) -> Tuple[str, str, str]:
-        """Materialverbrauch"""
+    def _template_material(self) -> tuple[str, str, str]:
+        """Materialverbrauch."""
         while True:
             material = random.choice(list(self.austrian_data.materialien.keys()))
             material_data = self.austrian_data.materialien[material]
@@ -926,8 +918,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _template_produktion(self) -> Tuple[str, str, str]:
-        """Produktionsaufgabe"""
+    def _template_produktion(self) -> tuple[str, str, str]:
+        """Produktionsaufgabe."""
         while True:
             maschinen = random.randint(3, 8)
             zeit = random.randint(20, 50)
@@ -952,8 +944,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _textaufgabe_schwer(self) -> Tuple[str, str, str]:
-        """Schwere mehrstufige Textaufgabe"""
+    def _textaufgabe_schwer(self) -> tuple[str, str, str]:
+        """Schwere mehrstufige Textaufgabe."""
         templates = [
             self._template_pumpsystem,
             self._template_mischung,
@@ -961,8 +953,8 @@ class AufgabenGenerator:
         ]
         return random.choice(templates)()
 
-    def _template_pumpsystem(self) -> Tuple[str, str, str]:
-        """Komplexes Pumpsystem"""
+    def _template_pumpsystem(self) -> tuple[str, str, str]:
+        """Komplexes Pumpsystem."""
         while True:
             tank = random.randint(1000, 3000)
             pumpe_a_zeit = random.randint(20, 40)
@@ -997,8 +989,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _template_mischung(self) -> Tuple[str, str, str]:
-        """Mischungsaufgabe"""
+    def _template_mischung(self) -> tuple[str, str, str]:
+        """Mischungsaufgabe."""
         while True:
             sorte_a_preis = random.randint(80, 120) / 100
             sorte_b_preis = random.randint(150, 200) / 100
@@ -1032,8 +1024,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def _template_logistik(self) -> Tuple[str, str, str]:
-        """Logistikaufgabe"""
+    def _template_logistik(self) -> tuple[str, str, str]:
+        """Logistikaufgabe."""
         while True:
             lkw_kapazitaet = random.randint(8000, 12000)
             paletten = random.randint(20, 30)
@@ -1065,8 +1057,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def generate_stellenwerttabelle(self) -> Tuple[str, str, str]:
-        """Generiert Stellenwerttabellen-Aufgabe"""
+    def generate_stellenwerttabelle(self) -> tuple[str, str, str]:
+        """Generiert Stellenwerttabellen-Aufgabe."""
         werte = []
         loesungen = []
 
@@ -1113,15 +1105,15 @@ class AufgabenGenerator:
         loesung = "Stellenwerttabelle:\n"
         loesung += "| Nr | HT | ZT | T | H | Z | E | , | z | h | t |\n"
         loesung += "|----|----|----|----|----|----|----|----|----|----|----|\n"
-        for i, l in enumerate(loesungen, 1):
-            loesung += f"| {i}. | {l} |\n"
+        for i, entry in enumerate(loesungen, 1):
+            loesung += f"| {i}. | {entry} |\n"
 
         erklaerung = "HT=Hunderttausender, ZT=Zehntausender, T=Tausender, H=Hunderter, Z=Zehner, E=Einer, z=Zehntel, h=Hundertstel, t=Tausendstel"
 
         return aufgabe, loesung, erklaerung
 
     def _zahl_zu_text(self, zahl: int) -> str:
-        """Wandelt Zahl in ausgeschriebenen Text"""
+        """Wandelt Zahl in ausgeschriebenen Text."""
         einer_namen = [
             "",
             "ein",
@@ -1194,8 +1186,8 @@ class AufgabenGenerator:
             # Für größere Zahlen
             return str(zahl)
 
-    def generate_drei_ansichten(self) -> Tuple[str, str, str]:
-        """Generiert Drei-Ansichten-Aufgabe"""
+    def generate_drei_ansichten(self) -> tuple[str, str, str]:
+        """Generiert Drei-Ansichten-Aufgabe."""
         koerper_typen = [
             "Quader mit Aussparung",
             "L-förmiger Körper",
@@ -1228,8 +1220,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def generate_koerpernetz(self) -> Tuple[str, str, str]:
-        """Generiert Körpernetz-Aufgabe"""
+    def generate_koerpernetz(self) -> tuple[str, str, str]:
+        """Generiert Körpernetz-Aufgabe."""
         koerper_typen = {
             "Würfel": 6,
             "Quader": 6,
@@ -1249,8 +1241,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def generate_runden(self) -> Tuple[str, str, str]:
-        """Generiert Rundungsaufgabe"""
+    def generate_runden(self) -> tuple[str, str, str]:
+        """Generiert Rundungsaufgabe."""
         zahlen = []
         stellen = []
         gerundete = []
@@ -1298,8 +1290,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def generate_einheiten(self, niveau: int) -> Tuple[str, str, str]:
-        """Generiert Einheitenumwandlung"""
+    def generate_einheiten(self, niveau: int) -> tuple[str, str, str]:
+        """Generiert Einheitenumwandlung."""
         if niveau == 1:  # Leicht
             conversions = [
                 (random.randint(3, 20), "m", "cm"),
@@ -1343,8 +1335,8 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def generate_geometrie(self, zeichnen: bool = True) -> Tuple[str, str, str]:
-        """Generiert Geometrieaufgabe"""
+    def generate_geometrie(self, zeichnen: bool = True) -> tuple[str, str, str]:
+        """Generiert Geometrieaufgabe."""
         if zeichnen:
             # L-förmiges Werkstück
             l1 = random.randint(40, 80)
@@ -1399,12 +1391,12 @@ class AufgabenGenerator:
 
 
 class TestGenerator:
-    """Hauptklasse für Testgenerierung"""
+    """Hauptklasse für Testgenerierung."""
 
     def __init__(
         self,
         schwierigkeit: Schwierigkeit = Schwierigkeit.MITTEL,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ):
         if seed is not None:
             random.seed(seed)
@@ -1414,8 +1406,8 @@ class TestGenerator:
         self.solutions = ""
         self.detailed_solutions = []
 
-    def generate_complete_test(self) -> Tuple[str, str, List[Dict]]:
-        """Generiert kompletten Test mit exakt 100 Punkten"""
+    def generate_complete_test(self) -> tuple[str, str, list[dict]]:
+        """Generiert kompletten Test mit exakt 100 Punkten."""
 
         # Header
         self.test_content = """# Überstiegstest - Technische Basisausbildung
@@ -1459,7 +1451,7 @@ class TestGenerator:
         return self.test_content, self.solutions, self.detailed_solutions
 
     def _add_grundrechenarten(self):
-        """Fügt Grundrechenarten-Sektion hinzu"""
+        """Fügt Grundrechenarten-Sektion hinzu."""
         self.test_content += "## 1. Grundrechenarten (20 Punkte)\n"
         self.test_content += "*Beachten Sie: Klammer vor Punkt vor Strich! Runden Sie auf 2 Dezimalstellen.*\n\n"
 
@@ -1516,7 +1508,7 @@ class TestGenerator:
         self.test_content += "\n---\n\n"
 
     def _add_zahlenraum(self):
-        """Fügt Zahlenraum-Sektion hinzu"""
+        """Fügt Zahlenraum-Sektion hinzu."""
         self.test_content += "## 2. Zahlenraum (20 Punkte)\n\n"
         self.solutions += "## 2. Zahlenraum\n\n"
 
@@ -1582,7 +1574,7 @@ class TestGenerator:
         self.test_content += "\n---\n\n"
 
     def _add_textaufgaben(self):
-        """Fügt Textaufgaben-Sektion hinzu"""
+        """Fügt Textaufgaben-Sektion hinzu."""
         self.test_content += "## 3. Textaufgaben (20 Punkte)\n\n"
         self.solutions += "## 3. Textaufgaben\n\n"
 
@@ -1617,7 +1609,7 @@ class TestGenerator:
         self.test_content += "\n---\n\n"
 
     def _add_brueche_gleichungen(self):
-        """Fügt Brüche und Gleichungen hinzu"""
+        """Fügt Brüche und Gleichungen hinzu."""
         self.test_content += "## 4. Brüche und Gleichungen (20 Punkte)\n\n"
         self.solutions += "## 4. Brüche und Gleichungen\n\n"
 
@@ -1676,7 +1668,7 @@ class TestGenerator:
         self.test_content += "\n---\n\n"
 
     def _add_raumvorstellung(self):
-        """Fügt Raumvorstellung-Sektion hinzu"""
+        """Fügt Raumvorstellung-Sektion hinzu."""
         self.test_content += "## 5. Raumvorstellung (20 Punkte)\n\n"
         self.solutions += "## 5. Raumvorstellung\n\n"
 
@@ -1739,7 +1731,7 @@ class TestGenerator:
         )
 
     def _add_bewertung(self):
-        """Fügt Bewertungsschlüssel hinzu"""
+        """Fügt Bewertungsschlüssel hinzu."""
         bewertung = """
 ---
 
@@ -1767,11 +1759,11 @@ class TestGenerator:
 
 
 class OutputManager:
-    """Verwaltet verschiedene Ausgabeformate"""
+    """Verwaltet verschiedene Ausgabeformate."""
 
     @staticmethod
     def save_markdown(content: str, filename: str):
-        """Speichert als Markdown-Datei"""
+        """Speichert als Markdown-Datei."""
         with open(filename, "w", encoding="utf-8") as f:
             f.write(content)
         print(f"✓ Markdown gespeichert: {filename}")
@@ -1780,7 +1772,7 @@ class OutputManager:
     def save_word(
         test_content: str, solutions: str, test_name: str = "ueberstiegstest"
     ):
-        """Erstellt professionelle Word-Dokumente"""
+        """Erstellt professionelle Word-Dokumente."""
         if not HAS_DOCX:
             print(
                 "❌ Word-Export nicht verfügbar. Installieren Sie: pip install python-docx"
@@ -1794,9 +1786,9 @@ class OutputManager:
         title = doc.add_heading("Überstiegstest", 0)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-        doc.add_heading(
-            "Technische Basisausbildung", 1
-        ).alignment = WD_ALIGN_PARAGRAPH.CENTER
+        doc.add_heading("Technische Basisausbildung", 1).alignment = (
+            WD_ALIGN_PARAGRAPH.CENTER
+        )
 
         # Header-Informationen
         doc.add_paragraph()
@@ -1838,7 +1830,7 @@ class OutputManager:
 
     @staticmethod
     def _parse_markdown_to_word(doc, markdown_text: str):
-        """Konvertiert Markdown zu Word-Format"""
+        """Konvertiert Markdown zu Word-Format."""
         if not HAS_DOCX:
             return
 
@@ -1868,7 +1860,6 @@ class OutputManager:
                 # Aufzählung
                 doc.add_paragraph(line[2:], style="List Bullet")
             elif line.startswith("```"):
-                # Code-Block (ignorieren)
                 continue
             elif line.startswith("|"):
                 cols = [c.strip() for c in line.strip("|").split("|")]
@@ -1897,7 +1888,7 @@ class OutputManager:
     def save_latex(
         test_content: str, solutions: str, test_name: str = "ueberstiegstest"
     ):
-        """Erstellt LaTeX-Dokumente"""
+        """Erstellt LaTeX-Dokumente."""
         latex_test = OutputManager._markdown_to_latex(test_content, is_solution=False)
         latex_solutions = OutputManager._markdown_to_latex(solutions, is_solution=True)
 
@@ -1918,12 +1909,12 @@ class OutputManager:
                     ["pdflatex", f"{test_name}_loesungen.tex"], capture_output=True
                 )
                 print(f"✓ PDFs erstellt: {test_name}.pdf, {test_name}_loesungen.pdf")
-            except:
+            except Exception:
                 print("⚠ PDF-Erstellung fehlgeschlagen")
 
     @staticmethod
     def _markdown_to_latex(markdown_text: str, is_solution: bool = False) -> str:
-        """Konvertiert Markdown zu LaTeX"""
+        """Konvertiert Markdown zu LaTeX."""
         latex = r"""\documentclass[12pt,a4paper]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[ngerman]{babel}
@@ -1976,7 +1967,6 @@ Bestehensgrenze: 60 Punkte
 
         # Konvertiere Markdown zu LaTeX
         lines = markdown_text.split("\n")
-        in_math = False
         in_list = False
         in_table = False
         in_code = False
@@ -1985,13 +1975,13 @@ Bestehensgrenze: 60 Punkte
         def _tex_escape(s: str) -> str:
             return (
                 s.replace("\\", "\textbackslash{}")
-                .replace("&", "\&")
-                .replace("%", "\%")
-                .replace("$", "\$")
-                .replace("#", "\#")
-                .replace("_", "\_")
-                .replace("{", "\{")
-                .replace("}", "\}")
+                .replace("&", r"\&")
+                .replace("%", r"\%")
+                .replace("$", r"\$")
+                .replace("#", r"\#")
+                .replace("_", r"\_")
+                .replace("{", r"\{")
+                .replace("}", r"\}")
                 .replace("~", "\textasciitilde{}")
                 .replace("^", "\textasciicircum{}")
             )
@@ -2034,10 +2024,10 @@ Bestehensgrenze: 60 Punkte
                 continue
             else:
                 if in_list:
-                    latex += "\end{itemize}\n"
+                    latex += "\\end{itemize}\n"
                     in_list = False
                 if in_table:
-                    latex += "\hline\n\end{tabular}\n\n"
+                    latex += "\\hline\n\\end{tabular}\n\n"
                     in_table = False
                 if "=" in line and any(
                     op in line for op in ["+", "-", "·", ":", "(", ")"]
@@ -2048,9 +2038,9 @@ Bestehensgrenze: 60 Punkte
                     latex += _tex_escape(line) + "\n\n"
 
         if in_list:
-            latex += "\end{itemize}\n"
+            latex += "\\end{itemize}\n"
         if in_table:
-            latex += "\hline\n\end{tabular}\n"
+            latex += "\\hline\n\\end{tabular}\n"
 
         latex += r"\end{document}"
 
@@ -2058,7 +2048,7 @@ Bestehensgrenze: 60 Punkte
 
 
 def main():
-    """Hauptprogramm"""
+    """Hauptprogramm."""
     print(
         """
 ╔══════════════════════════════════════════════════════════╗
@@ -2109,7 +2099,6 @@ def main():
     # Ausgabe
     output = OutputManager()
 
-    # Konsolen-Ausgabe (vollständig)
     print("\n" + "=" * 50)
     print("TEST AUSGABE:")
     print("=" * 50)
@@ -2132,10 +2121,9 @@ def main():
     # Word
     output.save_word(test_content, solutions)
 
-    # LaTeX (optional)
     try:
         output.save_latex(test_content, solutions)
-    except:
+    except Exception:
         print("⚠ LaTeX-Export übersprungen")
 
     # Detaillierte Lösungen als JSON

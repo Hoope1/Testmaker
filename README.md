@@ -1,3 +1,29 @@
+# Testmaker
+
+## Entwicklung & Setup
+
+### Voraussetzungen
+- Python 3.12
+- [pre-commit](https://pre-commit.com/)
+
+### Einrichtung
+1. Sensible Daten verbergen:
+   `python scripts/hide_ausgangsmaterial.py`
+2. Pre-Commit installieren und Hooks einrichten:
+   `pip install pre-commit`
+   `pre-commit install`
+3. Überprüfungen ausführen:
+   `pre-commit run --all-files`
+
+Die Hooks nutzen unter anderem folgende Tools:
+- ruff
+- black
+- isort
+- pyupgrade
+- autoflake
+- docformatter
+- eradicate
+
 Hier sind die wichtigsten Punkte:
 
 ## Sensible Daten
