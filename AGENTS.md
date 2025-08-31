@@ -1,15 +1,18 @@
 # AGENTS Guidelines — Code-Qualität & Auto-Modernisierung
 
 ## Ziel
+
 Automatisierte Verbesserung von Python-Code (Windows 11, Python ≥3.10; empfohlen 3.11/3.12).
 Security-Tools (z.B. bandit) sind explizit ausgeschlossen.
 
 ## Sensible Daten
+
 - Der Ordner `Ausgangsmaterial` und die Datei `AGENTS.py` dürfen nie im Repo erscheinen.
 - Verstecke sie mit `python scripts/hide_ausgangsmaterial.py`.
 - Ein Pre-Commit-Hook (`scripts/prevent_ausgangsmaterial_commit.py`) verhindert versehentliche Commits.
 
 ## Pre-Commit
+
 Installiere die Hooks aus `.pre-commit-config.yaml` und führe vor jedem Commit
 `pre-commit run --all-files` aus.
 
@@ -59,26 +62,55 @@ repos:
 ```
 
 ## Pipeline (Reihenfolge bindend)
+
 1. **Parsing & Kontext** – Dateien sammeln, UTF-8, `\n`-Normalisierung.
-2. **Syntax-Modernisierung** – LibCST-Codemods (f-Strings, pathlib, Literale…).
-3. **Formatierung & Importe** – Black, isort (Profil *black*).
-4. **Aufräumen** – autoflake, eradicate; optional `pycln/unimport`.
-5. **Docstrings** – docformatter (PEP 257).
-6. **Typing (optional)** – MonkeyType/PyAnnotate aus Laufzeit-Traces.
-7. **Qualität** – Radon-Metriken, Vulture-Vorschläge.
+1. **Syntax-Modernisierung** – LibCST-Codemods (f-Strings, pathlib, Literale…).
+1. **Formatierung & Importe** – Black, isort (Profil *black*).
+1. **Aufräumen** – autoflake, eradicate; optional `pycln/unimport`.
+1. **Docstrings** – docformatter (PEP 257).
+1. **Typing (optional)** – MonkeyType/PyAnnotate aus Laufzeit-Traces.
+1. **Qualität** – Radon-Metriken, Vulture-Vorschläge.
+
+## Pflichtablauf – Tool-Chain
+
+Die folgende Befehlskette ist strikt in dieser Reihenfolge auszuführen:
+
+1. `autoflake --remove-all-unused-imports --remove-unused-variables -r .`
+1. `pycln .`
+1. `unimport .`
+1. `isort .`
+1. `black .`
+1. `docformatter -r .`
+1. `ruff check --fix .`
+1. `eradicate -r .`
+1. `vulture .`
+1. `radon cc -s .`
+1. `wily build .` (nur bei sauberem Arbeitsverzeichnis)
+1. `mdformat AGENTS.md README.md`
+1. `python -c "import nbformat, sys; print(nbformat.__version__)"`
+1. `python -c "import importlib.metadata as im; print(im.version('libcst'))"`
+1. `python -c "import importlib.metadata as im; print(im.version('rope'))"`
+1. `bowler --version`
+1. `python -c "import redbaron; import importlib.metadata as im; print(im.version('redbaron'))"`
+1. `monkeytype list-modules`
+1. `pyannotate --help`
 
 ## Qualitätsbericht
+
 Pro Datei: Änderungen (Formatierung, Importe, Entferntes, Docstrings) und
 Radon-Metriken (CC/Halstead/MI). Refactor-Backlog: Vulture-Funde und Codemod-Vorschläge.
 
 ## Erweiterungen (optional)
+
 Rope/Bowler/RedBaron für größere Refactorings, mdformat für Markdown,
 pyproject-fmt & toml-sort für TOML.
 
 ## Qualitätsgarantien
+
 - `ast.parse` nach jedem Schritt.
 - Deterministische Reihenfolge der Tools.
 - Trailing Commas optional.
 
 ## Änderungsprotokoll
+
 - v1.0 (31-Aug-2025): Erstausgabe, reine API-Variante ohne Shell/CLI.
