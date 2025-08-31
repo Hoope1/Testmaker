@@ -1,0 +1,12 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 23.9.1
+    hooks:
+      - id: black
+  - repo: local
+    hooks:
+      - id: forbid-ausgangsmaterial
+        name: forbid committing Ausgangsmaterial
+        entry: python scripts/prevent_ausgangsmaterial_commit.py
+        language: system
+        pass_filenames: false
