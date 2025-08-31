@@ -12,6 +12,7 @@ import re
 import ast
 import operator
 import argparse
+import sys
 from fractions import Fraction
 from typing import Tuple, List, Dict, Any, Optional
 from dataclasses import dataclass
@@ -124,8 +125,11 @@ class MathSolver:
         """Sichere Auswertung mathematischer Ausdrücke"""
 
         def _eval(node):
-            if isinstance(node, ast.Num):
-                return node.n
+            if isinstance(node, (ast.Num, ast.Constant)):
+                v = getattr(node, "n", getattr(node, "value", None))
+                if not isinstance(v, (int, float)):
+                    raise ValueError("Ungültiger Wert")
+                return v
             if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
                 return -_eval(node.operand)
             if isinstance(node, ast.BinOp) and type(node.op) in MathSolver._ops:
@@ -381,8 +385,6 @@ class AufgabenGenerator:
         self.converter = UnitConverter()
 
     def _register_task(self, template_id: str, numbers: List[int]) -> bool:
-        if not self.quality_control.check_template(template_id):
-            return False
         if not self.quality_control.check_similarity(numbers):
             return False
         self.quality_control.register_template(template_id)
@@ -1870,6 +1872,8 @@ class OutputManager:
                 continue
             elif line.startswith("|"):
                 cols = [c.strip() for c in line.strip("|").split("|")]
+                if all(set(c) <= {"-", " "} for c in cols):
+                    continue
                 if current_table is None:
                     current_table = doc.add_table(rows=1, cols=len(cols))
                     hdr = current_table.rows[0].cells
@@ -2007,11 +2011,13 @@ Bestehensgrenze: 60 Punkte
                 continue
             elif line.startswith("|"):
                 cols = [c.strip() for c in line.strip("|").split("|")]
+                if all(set(c) <= {"-", " "} for c in cols):
+                    continue
                 if not in_table:
                     in_table = True
                     colspec = " | ".join(["l"] * len(cols))
-                    latex += f"\\begin{{tabular}}{{{colspec}}}\n\\hline\n"
-                latex += " & ".join(_tex_escape(c) for c in cols) + " \\\\n"
+                    latex += f"\\begin{{tabular}}{{{colspec}}}\\n\\hline\\n"
+                latex += " & ".join(_tex_escape(c) for c in cols) + " \\n"
                 continue
             else:
                 if in_list:
@@ -2062,17 +2068,21 @@ def main():
         }
         schwierigkeit = map_stufe[args.stufe]
     else:
-        print("Wählen Sie die Schwierigkeit:")
-        print("1. Einfach")
-        print("2. Mittel (Standard)")
-        print("3. Schwer")
-        choice = input("\nIhre Wahl (1-3, Enter für Standard): ").strip()
-        if choice == "1":
-            schwierigkeit = Schwierigkeit.EINFACH
-            print("→ Schwierigkeit: EINFACH")
-        elif choice == "3":
-            schwierigkeit = Schwierigkeit.SCHWER
-            print("→ Schwierigkeit: SCHWER")
+        if sys.stdin.isatty():
+            print("Wählen Sie die Schwierigkeit:")
+            print("1. Einfach")
+            print("2. Mittel (Standard)")
+            print("3. Schwer")
+            choice = input("\nIhre Wahl (1-3, Enter für Standard): ").strip()
+            if choice == "1":
+                schwierigkeit = Schwierigkeit.EINFACH
+                print("→ Schwierigkeit: EINFACH")
+            elif choice == "3":
+                schwierigkeit = Schwierigkeit.SCHWER
+                print("→ Schwierigkeit: SCHWER")
+            else:
+                schwierigkeit = Schwierigkeit.MITTEL
+                print("→ Schwierigkeit: MITTEL (Standard)")
         else:
             schwierigkeit = Schwierigkeit.MITTEL
             print("→ Schwierigkeit: MITTEL (Standard)")
