@@ -2,7 +2,7 @@ Aufgabenliste (maximale Detailtiefe, in sinnvoller Reihenfolge)
 
 Epic A – Dezimaldarstellung & Runden korrekt (kaufmännisch)
 
-A1. Decimal-basierte Formatierung einführen
+A1. Decimal-basierte Formatierung einführen ✅
 
 Änderungen
 
@@ -28,7 +28,7 @@ Im gesamten erzeugten Test/ Lösungen taucht niemals ein . als Dezimaltrennzeich
 
 
 
-A2. Stellenrunden mit ROUND_HALF_UP vereinheitlichen
+A2. Stellenrunden mit ROUND_HALF_UP vereinheitlichen ✅
 
 Änderungen
 
@@ -55,7 +55,7 @@ Keine Float-Artefakte (z. B. 1,999999).
 
 Epic B – Mathematische Konsistenz & Gleichungen
 
-B1. solve_linear_equation Typenbereinigung
+B1. solve_linear_equation Typenbereinigung ✅
 
 Änderungen
 
@@ -70,7 +70,7 @@ Keine gemischten Rückgabe-Typen in Downstream-Code; Lösungen werden korrekt fo
 
 
 
-B2. Variable für Unbekannte parametrisierbar
+B2. Variable für Unbekannte parametrisierbar ✅
 
 Änderungen
 
@@ -90,7 +90,7 @@ In der Aufgaben- und Lösungsdarstellung steht konsequent dasselbe Variable-Symb
 
 Epic C – Tabellen & „Zahlenraum“ korrekt rendern
 
-C1. Stellenwerttabelle mit 11 Spalten korrekt füllen
+C1. Stellenwerttabelle mit 11 Spalten korrekt füllen ✅
 
 Änderungen
 
@@ -107,7 +107,7 @@ Word-/LaTeX-Export erzeugt eine 11-spaltige Tabelle ohne verrutschte Spalten.
 
 
 
-C2. Markdown→Word Tabellenabschluss robust
+C2. Markdown→Word Tabellenabschluss robust ✅
 
 Änderungen
 
@@ -125,7 +125,7 @@ Nach einer Tabelle beginnende Absätze landen nicht versehentlich als weitere Ta
 
 Epic D – „No-Touch“ für Skizzen/ASCII, Parser-Stabilität
 
-D1. Codeblöcke / ASCII-Skizzen unverändert durchleiten
+D1. Codeblöcke / ASCII-Skizzen unverändert durchleiten ✅
 
 Änderungen
 
@@ -145,7 +145,7 @@ Die ASCII-Bilder (3-Ansichten, Körpernetz) sind bytegenau ident zwischen test_c
 
 Epic E – Einheitenumwandlung & sehr kleine/große Werte
 
-E1. Einheitenergebnisse konsistent formatiert
+E1. Einheitenergebnisse konsistent formatiert ✅
 
 Änderungen
 
@@ -165,7 +165,7 @@ Für Volumina/Fläche (m³/m²) keine Rundungsfehler sichtbar.
 
 Epic F – QualityControl robust
 
-F1. „Numbers“ als Floats akzeptieren
+F1. „Numbers“ als Floats akzeptieren ✅
 
 Änderungen
 
@@ -185,7 +185,7 @@ Register- und Vergleichsfunktionen funktionieren auch mit gemischten Ganzzahlen/
 
 Epic G – Geometrie-/Volumentasks transparenter
 
-G1. (Optional) zusätzliche Klarheit in Erklärtexten
+G1. (Optional) zusätzliche Klarheit in Erklärtexten ✅
 
 Änderungen
 
@@ -239,34 +239,34 @@ PDFs (falls LaTeX vorhanden) bauen durch, Tabellen/Listen lesbar.
 
 Empfohlene Commit-Reihenfolge (atomar, review-freundlich)
 
-1. feat(decimal): _quantize, de_format, fmt/fmt_int_or_dec Migration (Epic A1).
+1. feat(decimal): _quantize, de_format, fmt/fmt_int_or_dec Migration (Epic A1). ✅
 
 
-2. feat(rounding): round_to_place (Epic A2) + spez. Tests im Smoke-Check.
+2. feat(rounding): round_to_place (Epic A2) + spez. Tests im Smoke-Check. ✅
 
 
-3. fix(eq-types): solve_linear_equation Rückgabe vereinheitlichen (Epic B1).
+3. fix(eq-types): solve_linear_equation Rückgabe vereinheitlichen (Epic B1). ✅
 
 
-4. feat(eq-var): generate_gleichung(..., var="x") (Epic B2).
+4. feat(eq-var): generate_gleichung(..., var="x") (Epic B2). ✅
 
 
-5. fix(placevalue): Stellenwerttabelle 11-Spalten-Mapping (Epic C1).
+5. fix(placevalue): Stellenwerttabelle 11-Spalten-Mapping (Epic C1). ✅
 
 
-6. fix(word-parser): Tabellenabschluss (Epic C2).
+6. fix(word-parser): Tabellenabschluss (Epic C2). ✅
 
 
-7. fix(units): generate_einheiten → de_format (Epic E1).
+7. fix(units): generate_einheiten → de_format (Epic E1). ✅
 
 
-8. fix(qc): QualityControl Typ-Robustheit (Epic F1).
+8. fix(qc): QualityControl Typ-Robustheit (Epic F1). ✅
 
 
-9. docs(geo): Erklärtexte Geometrie (Epic G1).
+9. docs(geo): Erklärtexte Geometrie (Epic G1). ✅
 
 
-10. chore(smoke): smoke_check.py hinzufügen (siehe unten).
+10. chore(smoke): smoke_check.py hinzufügen (siehe unten). ✅
 
 
 

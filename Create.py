@@ -10,8 +10,10 @@ import operator
 import random
 import sys
 from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
 from fractions import Fraction
+from typing import Sequence
 
 # Für Word-Export
 try:
@@ -37,13 +39,28 @@ except Exception:
     HAS_LATEX = False
 
 
-def fmt(x: float, nd: int = 2, thousand: bool = False) -> str:
-    s = f"{x:,.{nd}f}" if thousand else f"{x:.{nd}f}"
+def _quantize(x: float | Decimal, nd: int) -> Decimal:
+    """Quantize helper with ROUND_HALF_UP."""
+    q = Decimal(str(x))
+    fmt_str = "1" if nd == 0 else "1." + "0" * nd
+    return q.quantize(Decimal(fmt_str), rounding=ROUND_HALF_UP)
+
+
+def de_format(x: float | Decimal, nd: int = 2, thousand: bool = False) -> str:
+    """Format number with comma as decimal separator."""
+    d = _quantize(x, nd)
+    s = f"{d:,.{nd}f}" if thousand else f"{d:.{nd}f}"
     return s.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def fmt_int_or_dec(x: float, nd_if_dec: int = 2) -> str:
-    return f"{int(x)}" if float(x).is_integer() else fmt(x, nd_if_dec)
+def fmt_int_or_dec(x: float | Decimal, nd_if_dec: int = 2) -> str:
+    d = Decimal(str(x))
+    if d == d.to_integral_value(rounding=ROUND_HALF_UP):
+        return str(int(d.quantize(Decimal("1"), rounding=ROUND_HALF_UP)))
+    return de_format(d, nd_if_dec)
+
+
+fmt = de_format
 
 
 class Schwierigkeit(Enum):
@@ -158,10 +175,10 @@ class MathSolver:
         return result, common_denominator
 
     @staticmethod
-    def solve_linear_equation(a: float, b: float, c: float, d: float) -> float:
+    def solve_linear_equation(a: float, b: float, c: float, d: float) -> float | None:
         """Löst ax + b = cx + d."""
         if a == c:
-            return None if b != d else "unendlich viele Lösungen"
+            return None
         return (d - b) / (a - c)
 
     @staticmethod
@@ -184,13 +201,13 @@ class MathSolver:
             return value
 
         decimals = places_map[place]
+        d = Decimal(str(value))
 
         if decimals >= 0:
-            return round(value, decimals)
-        else:
-            # Runden auf Zehner, Hunderter, etc.
-            factor = 10 ** abs(decimals)
-            return round(value / factor) * factor
+            return float(_quantize(d, decimals))
+        factor = Decimal("10") ** (-decimals)
+        q = (d / factor).to_integral_value(rounding=ROUND_HALF_UP)
+        return float(q * factor)
 
 
 class QualityControl:
@@ -201,8 +218,12 @@ class QualityControl:
         self.used_numbers = []
         self.similarity_threshold = 0.7
 
-    def check_similarity(self, numbers: list[int]) -> bool:
+    def check_similarity(self, numbers: Sequence[float]) -> bool:
         """Prüft ob Zahlen zu ähnlich zu vorherigen sind."""
+        try:
+            numbers = list(map(float, numbers))
+        except Exception:
+            numbers = []
         if not self.used_numbers:
             return True
 
@@ -214,8 +235,15 @@ class QualityControl:
                 return False
         return True
 
-    def _calculate_similarity(self, list1: list[int], list2: list[int]) -> float:
+    def _calculate_similarity(
+        self, list1: Sequence[float], list2: Sequence[float]
+    ) -> float:
         """Berechnet Ähnlichkeit zweier Zahlenlisten."""
+        try:
+            list1 = list(map(float, list1))
+            list2 = list(map(float, list2))
+        except Exception:
+            return 0
         if len(list1) != len(list2):
             return 0
 
@@ -226,8 +254,12 @@ class QualityControl:
         )
         return matches / len(list1)
 
-    def register_numbers(self, numbers: list[int]):
+    def register_numbers(self, numbers: Sequence[float]):
         """Registriert verwendete Zahlen."""
+        try:
+            numbers = list(map(float, numbers))
+        except Exception:
+            numbers = []
         self.used_numbers.append(numbers)
 
     def check_template(self, template_id: str) -> bool:
@@ -797,10 +829,11 @@ class AufgabenGenerator:
 
         return aufgabe, loesung, erklaerung
 
-    def generate_gleichung(self, schwer: bool = False) -> tuple[str, str, str]:
+    def generate_gleichung(
+        self, schwer: bool = False, var: str = "x"
+    ) -> tuple[str, str, str]:
         """Generiert Gleichung."""
         if not schwer:
-            # Mittlere Gleichung: 3 Klammern, keine Brüche
             a1, b1, c1 = (
                 random.randint(2, 5),
                 random.randint(1, 4),
@@ -809,26 +842,22 @@ class AufgabenGenerator:
             a2, b2 = random.randint(2, 4), random.randint(1, 8)
             a3, b3 = random.randint(1, 3), random.randint(2, 8)
 
-            # Eine Klammer mit -, eine mit +, eine mit ·
-            aufgabe = f"{a1}({b1}x + {c1}) - {a2}(x - {b2}) + {a3}·(x + {b3}) = 0"
+            aufgabe = (
+                f"{a1}({b1}{var} + {c1}) - {a2}({var} - {b2}) + {a3}·({var} + {b3}) = 0"
+            )
 
-            # Auflösen
-            # a1*b1*x + a1*c1 - a2*x + a2*b2 + a3*x + a3*b3 = 0
             coeff_x = a1 * b1 - a2 + a3
             const = a1 * c1 + a2 * b2 + a3 * b3
 
             if coeff_x != 0:
                 x = -const / coeff_x
-                loesung = f"x = {fmt(x)}"
-                erklaerung = (
-                    f"Ausmultiplizieren und zusammenfassen: {coeff_x}x + {const} = 0"
-                )
+                loesung = f"{var} = {fmt(x)}"
+                erklaerung = f"Ausmultiplizieren und zusammenfassen: {coeff_x}{var} + {const} = 0"
             else:
                 loesung = "Keine eindeutige Lösung"
-                erklaerung = "Die x-Terme heben sich auf"
+                erklaerung = f"Die {var}-Terme heben sich auf"
 
         else:
-            # Schwere Gleichung: Mit Brüchen und Dezimalzahlen
             a1, b1 = random.randint(2, 4), random.randint(1, 3)
             dec = random.choice([1.5, 2.5, 0.5])
             frac_num, frac_den = random.randint(1, 3), random.randint(2, 4)
@@ -838,22 +867,18 @@ class AufgabenGenerator:
                 random.randint(2, 8),
             )
 
-            aufgabe = (
-                f"{a1}({b1}x - {dec}) + {frac_num}/{frac_den}·(x + {c1}) = {d1}/{e1}"
-            )
+            aufgabe = f"{a1}({b1}{var} - {dec}) + {frac_num}/{frac_den}·({var} + {c1}) = {d1}/{e1}"
 
-            # Konvertiere alles zu Brüchen für genaue Berechnung
             dec_frac = Fraction(str(dec))
             frac = Fraction(frac_num, frac_den)
             right = Fraction(d1, e1)
 
-            # a1*b1*x - a1*dec + frac*x + frac*c1 = right
             coeff_x = Fraction(a1 * b1) + frac
             const = -Fraction(a1) * dec_frac + frac * Fraction(c1)
 
             x = (right - const) / coeff_x
-            loesung = f"x = {fmt(float(x), 3)}"
-            erklaerung = f"Mit Brüchen auflösen: {fmt(float(coeff_x), 3)}x + {fmt(float(const), 3)} = {fmt(float(right), 3)}"
+            loesung = f"{var} = {fmt(float(x), 3)}"
+            erklaerung = f"Mit Brüchen auflösen: {fmt(float(coeff_x), 3)}{var} + {fmt(float(const), 3)} = {fmt(float(right), 3)}"
 
         return aufgabe, loesung, erklaerung
 
@@ -1223,8 +1248,17 @@ class AufgabenGenerator:
         loesung = "Stellenwerttabelle:\n"
         loesung += "| Nr | HT | ZT | T | H | Z | E | , | z | h | t |\n"
         loesung += "|----|----|----|----|----|----|----|----|----|----|----|\n"
-        for i, wert in enumerate(loesungen, 1):
-            loesung += f"| {i}. | {wert} |\n"
+        for i, tags in enumerate(loesungen, 1):
+            cols = {k: "" for k in ["HT", "ZT", "T", "H", "Z", "E", "z", "h", "t"]}
+            for token in tags.split():
+                num = "".join(ch for ch in token if ch.isdigit())
+                sym = "".join(ch for ch in token if ch.isalpha())
+                if sym in cols:
+                    cols[sym] = num
+            loesung += (
+                f"| {i}. | {cols['HT']} | {cols['ZT']} | {cols['T']} | {cols['H']} | "
+                f"{cols['Z']} | {cols['E']} |   | {cols['z']} | {cols['h']} | {cols['t']} |\n"
+            )
 
         erklaerung = "HT=Hunderttausender, ZT=Zehntausender, T=Tausender, H=Hunderter, Z=Zehner, E=Einer, z=Zehntel, h=Hundertstel, t=Tausendstel"
 
@@ -1490,15 +1524,14 @@ class AufgabenGenerator:
             ergebnis = self.converter.convert(wert, von, nach)
 
             if ergebnis is not None:
-                # Formatierung ohne wissenschaftliche Notation
                 if ergebnis >= 10000:
-                    loesung += f"{i}. {fmt(ergebnis, 0)} {nach}\n"
+                    loesung += f"{i}. {de_format(ergebnis, 0)} {nach}\n"
                 elif ergebnis >= 1:
-                    loesung += f"{i}. {fmt(ergebnis)} {nach}\n"
+                    loesung += f"{i}. {de_format(ergebnis, 2)} {nach}\n"
                 elif ergebnis >= 0.01:
-                    loesung += f"{i}. {fmt(ergebnis, 4)} {nach}\n"
+                    loesung += f"{i}. {de_format(ergebnis, 4)} {nach}\n"
                 else:
-                    loesung += f"{i}. {fmt(ergebnis, 6)} {nach}\n"
+                    loesung += f"{i}. {de_format(ergebnis, 6)} {nach}\n"
             else:
                 loesung += f"{i}. [Konvertierung nicht möglich]\n"
 
@@ -1557,7 +1590,8 @@ class AufgabenGenerator:
             loesung = (
                 f"a) {fmt(gewicht)}kg, b) {fmt(kosten)}€, c) {fmt(kosten_verschnitt)}€"
             )
-            erklaerung = f"Volumen: {fmt(volumen)}dm³, Gewicht: {fmt(gewicht)}kg"
+            volumen_m3 = volumen / 1000
+            erklaerung = f"Volumen: {fmt(volumen)}dm³ ({fmt(volumen_m3, 3)}m³), Gewicht: {fmt(gewicht)}kg"
 
         return aufgabe, loesung, erklaerung
 
@@ -1569,6 +1603,7 @@ class TestGenerator:
         self,
         schwierigkeit: Schwierigkeit = Schwierigkeit.MITTEL,
         seed: int | None = None,
+        var_symbol: str = "x",
     ):
         if seed is not None:
             random.seed(seed)
@@ -1577,6 +1612,7 @@ class TestGenerator:
         self.test_content = ""
         self.solutions = ""
         self.detailed_solutions = []
+        self.var_symbol = var_symbol
 
     def generate_complete_test(self) -> tuple[str, str, list[dict]]:
         """Generiert kompletten Test mit exakt 100 Punkten."""
@@ -1810,7 +1846,9 @@ class TestGenerator:
         self.test_content += "**Gleichungen (8 Punkte)**\n\n"
 
         # Mittlere Gleichung
-        aufgabe, loesung, erklaerung = self.generator.generate_gleichung(schwer=False)
+        aufgabe, loesung, erklaerung = self.generator.generate_gleichung(
+            schwer=False, var=self.var_symbol
+        )
         self.test_content += f"**b.1)** {aufgabe} **(4 Punkte)**\n\n"
         self.solutions += f"**b.1)** {loesung}\n   {erklaerung}\n\n"
         self.detailed_solutions.append(
@@ -1824,7 +1862,9 @@ class TestGenerator:
         )
 
         # Schwere Gleichung
-        aufgabe, loesung, erklaerung = self.generator.generate_gleichung(schwer=True)
+        aufgabe, loesung, erklaerung = self.generator.generate_gleichung(
+            schwer=True, var=self.var_symbol
+        )
         self.test_content += f"**b.2)** {aufgabe} **(4 Punkte)**\n\n"
         self.solutions += f"**b.2)** {loesung}\n   {erklaerung}\n\n"
         self.detailed_solutions.append(
@@ -2008,16 +2048,24 @@ class OutputManager:
 
         lines = markdown_text.split("\n")
         current_table = None
+        in_code_block = False
 
         for line in lines:
+            if line.startswith("```"):
+                in_code_block = not in_code_block
+                current_table = None
+                continue
+            if in_code_block:
+                doc.add_paragraph(line)
+                continue
             if line.startswith("## "):
-                # Hauptüberschrift
+                current_table = None
                 doc.add_heading(line[3:], 2)
             elif line.startswith("### "):
-                # Unterüberschrift
+                current_table = None
                 doc.add_heading(line[4:], 3)
             elif line.startswith("**") and line.endswith("**"):
-                # Fett
+                current_table = None
                 p = doc.add_paragraph()
                 p.add_run(line[2:-2]).bold = True
             elif (
@@ -2025,14 +2073,12 @@ class OutputManager:
                 and line.endswith("*")
                 and not line.startswith("**")
             ):
-                # Kursiv
+                current_table = None
                 p = doc.add_paragraph()
                 p.add_run(line[1:-1]).italic = True
             elif line.startswith("- "):
-                # Aufzählung
+                current_table = None
                 doc.add_paragraph(line[2:], style="List Bullet")
-            elif line.startswith("```"):
-                continue
             elif line.startswith("|"):
                 cols = [c.strip() for c in line.strip("|").split("|")]
                 if all(set(c) <= {"-", " "} for c in cols):
@@ -2048,10 +2094,10 @@ class OutputManager:
                         row[j].text = txt
             elif line.strip() == "---":
                 # Horizontale Linie
+                current_table = None
                 doc.add_paragraph("_" * 50)
             elif line.strip():
                 current_table = None
-                # Normaler Text
                 doc.add_paragraph(line)
             else:
                 current_table = None
