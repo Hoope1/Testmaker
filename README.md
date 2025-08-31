@@ -77,6 +77,9 @@ Das Tool basiert auf der Analyse von **13 authentischen Überstiegstests** (Vers
 #### 5. Raumvorstellung (20 Punkte)
 
 - **Zeichenaufgabe:** 10 Punkte - Geometrische Figuren mit Maßstab (Rechtecke, L-förmige Werkstücke)
+  - Maßstäbe folgen den technischen Reihen 1:2, 1:5, 1:10, 1:20, 1:50, …
+  - Die kürzeste Seite der Zeichnung ist mindestens 2 cm lang
+  - Maximaler Zeichenbereich: 189 mm × 267 mm (A4 minus 10%)
 - **Technische Raumaufgabe:** 10 Punkte - Volumen/Gewichtsberechnungen mit praktischen Anwendungen (Stahlträger, Öltanks)
 
 ### Technische Implementierung
