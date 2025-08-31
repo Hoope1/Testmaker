@@ -1775,16 +1775,16 @@ def main():
     # Ausgabe
     output = OutputManager()
 
-    # Konsolen-Ausgabe (gekürzt)
+    # Konsolen-Ausgabe (vollständig)
     print("\n" + "=" * 50)
-    print("TEST PREVIEW (erste 1000 Zeichen):")
+    print("TEST AUSGABE:")
     print("=" * 50)
-    print(test_content[:1000] + "...")
+    print(test_content)
 
     print("\n" + "=" * 50)
-    print("LÖSUNGEN PREVIEW (erste 1000 Zeichen):")
+    print("LÖSUNGEN AUSGABE:")
     print("=" * 50)
-    print(solutions[:1000] + "...")
+    print(solutions)
 
     # Dateien speichern
     print("\n" + "=" * 50)
