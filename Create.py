@@ -1995,18 +1995,18 @@ Bestehensgrenze: 60 Punkte
             if in_code:
                 continue
             if line.startswith("## "):
-                latex += f"\section{{{_tex_escape(line[3:])}}}\n"
+                latex += r"\section{" + _tex_escape(line[3:]) + "}\n"
             elif line.startswith("### "):
-                latex += f"\subsection{{{_tex_escape(line[4:])}}}\n"
+                latex += r"\subsection{" + _tex_escape(line[4:]) + "}\n"
             elif line.startswith("**") and line.endswith("**"):
                 latex += f"\textbf{{{_tex_escape(line[2:-2])}}}\n\n"
             elif line.startswith("*") and line.endswith("*"):
                 latex += f"\textit{{{_tex_escape(line[1:-1])}}}\n\n"
             elif line.startswith("- "):
                 if not in_list:
-                    latex += "\begin{itemize}\n"
+                    latex += r"\begin{itemize}" + "\n"
                     in_list = True
-                latex += f"\item {_tex_escape(line[2:])}\n"
+                latex += r"\item " + _tex_escape(line[2:]) + "\n"
                 continue
             elif line.startswith("|"):
                 cols = [c.strip() for c in line.strip("|").split("|")]
@@ -2016,7 +2016,7 @@ Bestehensgrenze: 60 Punkte
                     in_table = True
                     expected_cols = len(cols)
                     colspec = " | ".join(["l"] * expected_cols)
-                    latex += f"\begin{{tabular}}{{{colspec}}}\n\hline\n"
+                    latex += r"\begin{tabular}{" + colspec + "}\n" + r"\hline" + "\n"
                 else:
                     if len(cols) < expected_cols:
                         cols += [""] * (expected_cols - len(cols))
@@ -2026,10 +2026,10 @@ Bestehensgrenze: 60 Punkte
                 continue
             else:
                 if in_list:
-                    latex += "\\end{itemize}\n"
+                    latex += r"\end{itemize}" + "\n"
                     in_list = False
                 if in_table:
-                    latex += "\\hline\n\\end{tabular}\n\n"
+                    latex += r"\hline" + "\n" + r"\end{tabular}" + "\n\n"
                     in_table = False
                 if "=" in line and any(
                     op in line for op in ["+", "-", "·", ":", "(", ")"]
@@ -2040,9 +2040,9 @@ Bestehensgrenze: 60 Punkte
                     latex += _tex_escape(line) + "\n\n"
 
         if in_list:
-            latex += "\\end{itemize}\n"
+            latex += r"\end{itemize}" + "\n"
         if in_table:
-            latex += "\\hline\n\\end{tabular}\n"
+            latex += r"\hline" + "\n" + r"\end{tabular}" + "\n"
 
         latex += r"\end{document}"
 
