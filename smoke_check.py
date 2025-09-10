@@ -132,11 +132,6 @@ def check_complete_generation(seed: int, var_symbol: str = "x"):
 
     # 4) Gleichungen: Variable konsistent
     if var_symbol != "x":
-        eq_lines_task = [
-            ln
-            for ln in test_md.splitlines()
-            if "Gleichungen" in ln or ("=" in ln and ("(" in ln and ")" in ln))
-        ]
         eq_lines_sol = [
             ln
             for ln in sol_md.splitlines()
