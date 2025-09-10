@@ -1,5 +1,31 @@
 Hier sind die wichtigsten Punkte:
 
+## Installation unter Windows 11
+
+1. [Python 3.12](https://www.python.org/downloads/windows/) installieren und bei der Installation "Add Python to PATH" aktivieren.
+1. PowerShell **als Administrator** öffnen und die Ausführung von Skripten erlauben:
+   ```powershell
+   Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+   ```
+1. Projektverzeichnis klonen und wechseln:
+   ```powershell
+   git clone <REPO-URL>
+   cd Testmaker
+   ```
+1. Virtuelle Umgebung anlegen und aktivieren:
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate
+   ```
+1. Abhängigkeiten in der virtuellen Umgebung installieren:
+   ```powershell
+   pip install -r requirements.txt
+   ```
+1. Generator starten:
+   ```powershell
+   python Create.py
+   ```
+
 ## Sensible Daten
 
 Der Ordner `Ausgangsmaterial` enthält vertrauliche Dokumente und wird nicht versioniert.
