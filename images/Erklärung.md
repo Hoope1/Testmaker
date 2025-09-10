@@ -1,0 +1,1 @@
+Bilder die in den Tests im Rotationsprinzip verwendet werden sollen. Der Dateiname soll der direkte hinweis sein ob es fur die Beispiele mit den drei ansichten oder dem Körpernetz verwendet werden soll!
